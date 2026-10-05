@@ -29,19 +29,18 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 
 ## Set up the backend (about 15 minutes, once)
 
-1. **Make a fresh bCourses token.** In bCourses, go to **Account > Settings**, find the token you made for this (Purpose: "Personal project management tool"), and click **Regenerate Token**. Keep the page open. If you'd rather start over, delete that one and use **+ New Access Token** with an expiry after the semester ends (Dec 18).
-2. In Google Drive, create a blank Google Sheet named **Classes Hub data**. Use the same Google account you used for the Microbe Busters Hub (if your berkeley.edu account doesn't offer **Anyone** in step 9, see below).
-3. In the Sheet, go to **Extensions > Apps Script**. Delete whatever is in `Code.gs` and paste in the contents of `apps-script/Code.gs` from this repository.
-4. Click the gear icon (**Project Settings**) and tick **Show "appsscript.json" manifest file in editor**. Back in the editor, open `appsscript.json` and replace it with `apps-script/appsscript.json`. Save.
-5. Still in **Project Settings**, under **Script properties**, add `CANVAS_TOKEN` and paste the token from step 1. This is the only place the token goes. Don't put it in this repository, the Sheet, or a chat.
-6. In the function menu at the top, pick `setup` and click **Run**. Approve the permissions when Google asks (Sheets, Calendar, connecting to an external service, send email).
-   - This creates the tabs, a calendar called "Fall 2026 classes", a bCourses check every 2 hours, the 8 AM email, and your **access code**, then reads bCourses for the first time.
-   - Open **Execution log** to see the access code and how many courses and assignments it found. Lost the code? It's under **Script properties** as `ACCESS_CODE`.
-7. Look at the **Courses** tab. If a course you aren't taking as a class showed up (a department or orientation site), you can hide it later from its course page.
-8. In **Script properties**, add `APP_URL` with the GitHub Pages address, `https://gregor-posadas.github.io/classes-hub/`. The email and calendar events link back to it.
-9. Click **Deploy > New deployment**, choose type **Web app**, set **Execute as: Me** and **Who has access: Anyone**, then **Deploy**. Copy the URL that ends in `/exec`.
-10. In this repository, open `assets/config.js` and paste that URL into `apiUrl`. Run `sh scripts/stamp-version.sh`, then commit and push. The site switches from sample data to your classes.
-11. Open the site, enter the access code once on each device, and you're set.
+1. **Turn on the site.** On GitHub, open this repo's **Settings > Pages**. Under Build and deployment, set Source to **Deploy from a branch**, pick **main** and **/(root)**, and save. The site appears at `https://gregor-posadas.github.io/classes-hub/` within a few minutes, on sample data for now.
+2. **Retire the old token.** In bCourses, go to **Account > Settings**, find the "Personal project management tool" token under Approved Integrations, and delete it. It was pasted into a chat, so it shouldn't be used. Don't make the new one yet.
+3. In Google Drive, create a blank Google Sheet named **Classes Hub data**, with the same Google account as the Microbe Busters Hub (if **Anyone** isn't offered in step 7, see below).
+4. In the Sheet, go to **Extensions > Apps Script**. Delete whatever is in `Code.gs` and paste in the contents of `apps-script/Code.gs` from this repository.
+5. Click the gear icon (**Project Settings**) and tick **Show "appsscript.json" manifest file in editor**. Back in the editor, open `appsscript.json` and replace it with `apps-script/appsscript.json`. Save.
+6. In the function menu at the top, pick `setup` and click **Run**. Approve the permissions when Google asks (Sheets, Calendar, connecting to an external service, send email). Open **Execution log** and copy your **access code**. Lost it? It's under **Project Settings > Script properties** as `ACCESS_CODE`.
+7. Click **Deploy > New deployment**, choose type **Web app**, set **Execute as: Me** and **Who has access: Anyone**, then **Deploy**. Copy the URL that ends in `/exec`.
+8. Put that URL in `assets/config.js` as `apiUrl`, run `sh scripts/stamp-version.sh`, then commit and push. (Or hand the URL to Claude to do it.)
+9. Open the site, enter the access code, and go to **About and settings**. Under **bCourses**, follow the three steps there to make a new token in bCourses (Purpose "Classes Hub", expiry after Dec 18), paste it in, and click **Connect bCourses**. The hub checks it with bCourses, saves it, and reads your classes right away.
+10. Look over your courses. Hide any that aren't classes (a department or orientation site) from **Course settings** on their course page.
+
+The token goes only through the box in step 9 (or, if you prefer, straight into Script properties as `CANVAS_TOKEN`). Never put it in this repository or the Sheet. The site can replace the token but never show it.
 
 When you change `Code.gs` later, use **Deploy > Manage deployments > Edit > New version** so the `/exec` URL stays the same.
 
@@ -55,10 +54,10 @@ All in **Project Settings > Script properties**:
 
 | Property | What it does | Default |
 | --- | --- | --- |
-| `CANVAS_TOKEN` | Your bCourses token. Required. | |
+| `CANVAS_TOKEN` | Your bCourses token. Usually set from the site under About and settings > bCourses. | |
 | `ACCESS_CODE` | The code the site asks for. Change it to lock out old devices. | made by `setup` |
 | `OWNER_EMAIL` | Where the morning email goes. | the account that ran `setup` |
-| `APP_URL` | The site's address, for links in emails and calendar events. | |
+| `APP_URL` | The site's address, for links in emails and calendar events. | `https://gregor-posadas.github.io/classes-hub/` |
 | `TERM` | Which bCourses term counts as this semester. | `Fall 2026` |
 | `EMAIL_PREF` | `daily`, `weekly` (Mondays) or `off`. Also set on the About page. | `daily` |
 | `CALENDAR_SYNC` | `off` keeps due dates off Google Calendar. Run `clearCalendar` once to remove the ones already there. | `on` |
@@ -70,7 +69,7 @@ The same repo, site address and Sheet carry over. Each new semester:
 
 1. In Script properties, change `TERM` (for example to `Spring 2027`) and `SEMESTER_START` and `SEMESTER_END`.
 2. In `assets/config.js`, change `semesterLabel`, `semesterStart` and `semesterEnd`. Run `sh scripts/stamp-version.sh`, commit and push.
-3. If the token expired, make a new one in bCourses and paste it into `CANVAS_TOKEN`.
+3. If the token expired, make a new one in bCourses and paste it under **About and settings > bCourses** (works from a phone).
 4. Run `syncCanvas`. Last semester's courses are hidden on their own, and their history stays in the Sheet.
 5. Optional: rename the calendar in Google Calendar (for example to "Spring 2027 classes"). The hub keeps using the same one.
 

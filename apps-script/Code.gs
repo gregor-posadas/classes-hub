@@ -30,6 +30,7 @@ var TABS = {
 /* Settings. Each can be overridden in Project Settings > Script properties without editing code. */
 var DEFAULTS = {
   CANVAS_URL: 'https://bcourses.berkeley.edu',
+  APP_URL: 'https://gregor-posadas.github.io/classes-hub/',   // the site, for links in the email and calendar
   TERM: 'Fall 2026',               // courses whose bCourses term name contains this
   SEMESTER_START: '2026-08-26',    // used only if no course has a term with that name
   SEMESTER_END: '2026-12-18',
@@ -87,12 +88,12 @@ function setup() {
   Logger.log('Setup done.');
   Logger.log('Your access code (enter it once on each device): ' + props.getProperty('ACCESS_CODE'));
   if (!props.getProperty('CANVAS_TOKEN')) {
-    Logger.log('No bCourses token yet. Add CANVAS_TOKEN in Project Settings > Script properties, then run syncCanvas.');
+    Logger.log('Next: deploy as a web app, open the site, and paste your bCourses token under About and settings > Connect bCourses.');
     return;
   }
   var r = syncCanvas();
   Logger.log('Read bCourses: ' + r.courses + ' courses, ' + r.items + ' assignments, ' + r.announcements + ' announcements.' + (r.error ? ' Problem: ' + r.error : ''));
-  Logger.log('Next: set APP_URL in Script properties to your GitHub Pages address, then deploy as a web app.');
+  Logger.log('Next: deploy as a web app.');
 }
 
 function randomCode() {
@@ -132,6 +133,12 @@ function doPost(e) {
         var r = syncCanvas();
         return json({ ok: !r.error || r.items > 0, error: r.error || '', result: r, data: payload() });
       case 'sendDigest': return json({ ok: true, sent: sendDailyDigest(true) });
+      case 'setToken':
+        var who = setToken(b.token);   // checked with bCourses before it's saved
+        lock.releaseLock();
+        var first = syncCanvas();
+        return json({ ok: true, name: who, result: first, data: payload() });
+      case 'clearToken': return json(clearToken());
       default: throw new Error('Unknown action.');
     }
   } catch (err) {
@@ -227,7 +234,8 @@ function payload() {
       lastSync: props.getProperty('LAST_SYNC') || '',
       lastSyncOk: props.getProperty('LAST_SYNC_OK') || '',
       syncError: props.getProperty('SYNC_ERROR') || '',
-      hasToken: !!props.getProperty('CANVAS_TOKEN')
+      hasToken: !!props.getProperty('CANVAS_TOKEN'),
+      tokenSetAt: props.getProperty('TOKEN_SET_AT') || ''
     },
     generated: cell(new Date())
   };
@@ -236,9 +244,9 @@ function payload() {
 /* ------------------------------------------------------------------ bCourses (Canvas API), read only */
 
 /** GET from the Canvas API with your token, following every page. Returns an array for list endpoints. */
-function canvasGet(path) {
-  var token = PropertiesService.getScriptProperties().getProperty('CANVAS_TOKEN');
-  if (!token) { var e0 = new Error('No bCourses token yet. Add CANVAS_TOKEN in Project Settings > Script properties.'); e0.kind = 'auth'; throw e0; }
+function canvasGet(path, tokenOverride) {
+  var token = tokenOverride || PropertiesService.getScriptProperties().getProperty('CANVAS_TOKEN');
+  if (!token) { var e0 = new Error('bCourses isn\'t connected yet. Paste your token under About and settings > Connect bCourses.'); e0.kind = 'auth'; throw e0; }
   var base = setting('CANVAS_URL').replace(/\/+$/, '');
   var url = base + path, out = null, pages = 0;
   while (url && pages++ < 40) {
@@ -246,7 +254,7 @@ function canvasGet(path) {
     var res = UrlFetchApp.fetch(url, { method: 'get', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, muteHttpExceptions: true, followRedirects: false });
     var code = res.getResponseCode();
     if (code === 401) {
-      var e1 = new Error('bCourses did not accept the token. It may have expired or been regenerated. Make a new one in bCourses (Account > Settings) and paste it into CANVAS_TOKEN.');
+      var e1 = new Error('bCourses did not accept the token. It may have expired or been regenerated. Make a new one in bCourses (Account > Settings) and paste it under About and settings > Connect bCourses.');
       e1.kind = 'auth'; throw e1;
     }
     if (code === 403 && /rate limit/i.test(res.getContentText())) { Utilities.sleep(2000); pages--; continue; }
@@ -565,6 +573,47 @@ function setEmailPref(pref) {
   PropertiesService.getScriptProperties().setProperty('EMAIL_PREF', pref);
   log('email setting', pref);
   return { ok: true, emailPref: pref };
+}
+
+/* ------------------------------------------------------------------ the bCourses token */
+
+/** A pasted token, trimmed, or '' if it can't be one. Canvas tokens look like "1072~" followed by letters and digits. */
+function cleanToken(t) {
+  var s = String(t || '').replace(/\s+/g, '');
+  return /^[A-Za-z0-9~_\-]{20,200}$/.test(s) ? s : '';
+}
+
+/**
+ * Saves a new bCourses token from the site, after checking it works. The token is written only to
+ * Script properties and is never sent back to the site, so the site can replace it but never show it.
+ * Returns the name bCourses has for you.
+ */
+function setToken(raw) {
+  var token = cleanToken(raw);
+  if (!token) throw new Error('That doesn\'t look like a bCourses token. Copy the whole token from bCourses and try again.');
+  var me;
+  try { me = canvasGet('/api/v1/users/self', token); }
+  catch (e) {
+    if (e.kind === 'auth') throw new Error('bCourses didn\'t accept that token. Check that you copied all of it, or make a new one.');
+    throw new Error('Couldn\'t reach bCourses to check the token (' + e.message + '). Try again in a minute.');
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('CANVAS_TOKEN', token);
+  props.setProperty('TOKEN_SET_AT', cell(new Date()));
+  if (me && me.short_name) props.setProperty('CANVAS_NAME', me.short_name);
+  props.setProperty('SYNC_ERROR', '');
+  log('token', 'replaced from the site');
+  return me && me.short_name ? me.short_name : '';
+}
+
+/** Removes the token. bCourses stops being read until a new one is pasted; everything already read stays. */
+function clearToken() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('CANVAS_TOKEN');
+  props.deleteProperty('TOKEN_SET_AT');
+  props.setProperty('SYNC_ERROR', '');
+  log('token', 'removed from the site');
+  return { ok: true };
 }
 
 function publicItem(it) { var o = Object.assign({}, it); delete o.calendarEventId; delete o.calendarSig; return o; }

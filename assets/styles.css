@@ -4,6 +4,7 @@
 
 @font-face { font-family: "Atkinson"; src: url(../fonts/AtkinsonHyperlegibleNext-Regular.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "Atkinson"; src: url(../fonts/AtkinsonHyperlegibleNext-RegularItalic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Atkinson Mono"; src: url(../fonts/AtkinsonHyperlegibleMono-Regular.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "Atkinson"; src: url(../fonts/AtkinsonHyperlegibleNext-Bold.woff2) format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 
 :root {
@@ -437,3 +438,13 @@ h1[tabindex="-1"]:focus { outline: none; }
 /* Long links from bCourses shouldn't push the page sideways on a phone */
 .rt-p, .list li, .news__body { overflow-wrap: anywhere; }
 .toolbar .field { max-width: 22rem; }
+
+/* bCourses connection */
+.conn { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; max-width: var(--read); }
+.conn .st__shape { margin-top: 4px; }
+.token-steps { max-width: var(--read); }
+.token-form { display: grid; gap: 14px; margin-top: 18px; max-width: 30rem; }
+.token-form input { font-family: "Atkinson Mono", ui-monospace, monospace; }
+.token-more { margin-top: 18px; max-width: var(--read); }
+.token-more summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+#sync > .error { margin-top: 12px; max-width: var(--read); }

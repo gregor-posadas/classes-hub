@@ -212,7 +212,7 @@
   function showNotice() {
     var n = document.getElementById("notice"), s = state.data.settings;
     if (state.demo) n.innerHTML = "<p><b>Demo mode.</b> These are sample courses with dates moved to this week. Nothing is saved. Connect the backend to see your real classes (see README).</p>";
-    else if (!s.hasToken) n.innerHTML = '<p><b>No bCourses token yet.</b> Add it as CANVAS_TOKEN in the Apps Script project\'s Script properties. <a href="#/about/sync">How</a></p>';
+    else if (!s.hasToken) n.innerHTML = '<p><b>bCourses isn\'t connected yet.</b> <a href="#/about/sync">Connect bCourses</a> to bring in your classes.</p>';
     else if (s.syncError) n.innerHTML = '<p><b>bCourses:</b> ' + esc(s.syncError) + ' <a href="#/about/sync">More</a></p>';
     else { n.hidden = true; n.innerHTML = ""; }
     if (n.innerHTML) n.hidden = false;
@@ -332,7 +332,7 @@
       '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Next 7 days</h2>' + nextHtml +
       (later ? '<p class="section__note"><a href="#/all">' + plural(later, "more thing") + " due after that</a></p>" : "") +
       '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>' +
-      '<section class="section" aria-labelledby="cs-h"><h2 id="cs-h">Courses</h2>' + (cards ? '<div class="signs">' + cards + "</div>" : '<p class="empty">No courses yet. They show up after the first bCourses check.</p>') + "</section>" +
+      '<section class="section" aria-labelledby="cs-h"><h2 id="cs-h">Courses</h2>' + (cards ? '<div class="signs">' + cards + "</div>" : (state.data.settings.hasToken ? '<p class="empty">No courses yet. They show up after the first bCourses check.</p>' : '<p class="empty">No courses yet. <a href="#/about/sync">Connect bCourses</a> and they show up right away.</p>')) + "</section>" +
       newsHtml + "</div>";
   }
 
@@ -459,26 +459,77 @@
     }).join("");
     var last = s.lastSyncOk ? fmtDay(new Date(s.lastSyncOk)) + ", " + fmtTime(new Date(s.lastSyncOk)) : "never";
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">About and settings</h1><p>Your ' + esc(cfg.semesterLabel || "") + ' classes in one place. The hub reads bCourses every 2 hours and keeps a copy in a Google Sheet. It only reads: it never submits, posts or changes anything on bCourses.</p></div>' +
+      syncSection(s, last) +
       '<section class="section" id="email" aria-labelledby="email-h"><h2 id="email-h" tabindex="-1">Morning email</h2>' +
       '<p class="section__note">Comes at 8 AM, only on days with something to say: what\'s overdue, what\'s due in the next 2 days, assignments new on bCourses, and announcements. Each item links to its page here.</p>' +
       '<fieldset class="picker picker--email"><legend class="sr">How often you get the morning email</legend><div class="picker__opts" data-email>' +
       EMAIL_OPTS.map(function (o) { return '<label><input type="radio" name="emailPref" value="' + o[0] + '"' + (o[0] === cur ? " checked" : "") + "><span><b>" + o[1] + "</b><small>" + o[2] + "</small></span></label>"; }).join("") +
       '</div></fieldset><div class="actions"><button type="button" class="btn" data-act="send-digest"' + (state.demo ? " disabled" : "") + ">Email me the summary now</button></div></section>" +
-      '<section class="section" id="sync" aria-labelledby="sync-h"><h2 id="sync-h" tabindex="-1">bCourses</h2>' +
-      '<p class="section__note">Last read ' + esc(last) + ". " + (s.syncError ? esc(s.syncError) : "No problems.") + "</p>" +
-      '<div class="actions"><button type="button" class="btn btn--solid" data-act="sync-now"' + (state.demo ? " disabled" : "") + ">Check bCourses now</button>" +
-      (store.get("code") ? '<button type="button" class="btn btn--quiet" data-act="forget-code">Forget the access code on this device</button>' : "") + "</div>" +
-      (s.calendar === false ? "" : '<p class="section__note" style="margin-top:16px">Every due date is also on your "' + esc((cfg.semesterLabel || "") + ' classes') + '" Google Calendar, which the hub keeps up to date. Nobody is invited to those events.</p>') + "</section>" +
       '<section class="section" aria-labelledby="sym-h"><h2 id="sym-h">What the symbols mean</h2><p class="section__note">Each status has its own shape and word, and each course its own number on its badge, so color is never the only clue.</p><ul class="legend">' + legend + "</ul></section>" +
       '<section class="section" aria-labelledby="faq-h"><h2 id="faq-h">Questions</h2>' +
       faq("An assignment I can see on bCourses isn't here.", "<p>The hub checks every 2 hours, so it may just be new: use <b>Check bCourses now</b> above. If it still doesn't show, the course may hide its Assignments page from students (the course page says so), or the work lives on another site like Gradescope. Add it yourself with <b>Add a to-do</b>.</p>") +
       faq("Something I turned in still shows as not done.", "<p>Things turned in on paper, in class or on another site don't show as submitted on bCourses. Open it here and set <b>Your progress</b> to Done. Anything you submit on bCourses is marked done on its own at the next check.</p>") +
       faq("A course I'm not really taking shows up.", "<p>Open the course, choose <b>Course settings</b>, and tick <b>Hide this course</b>. Its work drops off This week, All work, the email and the calendar.</p>") +
-      faq("Is the bCourses token safe?", "<p>It's kept only in the Apps Script project's Script properties and is only ever sent to bcourses.berkeley.edu. The website never sees it. The hub only reads from bCourses. Your access code keeps the hub itself private, so don't share it.</p>") +
-      faq("bCourses says the token stopped working.", "<p>Tokens expire on the date you picked when you made it, or stop when regenerated. In bCourses, go to <b>Account</b>, then <b>Settings</b>, make a new access token, and paste it into <b>CANVAS_TOKEN</b> in the Apps Script project's Script properties. Then use <b>Check bCourses now</b>.</p>") +
+      faq("Is the bCourses token safe?", "<p>When you paste it under bCourses above, it goes once, over a secure connection, to the hub's backend in your Google account, which keeps it in its private settings. From then on it's only ever sent to bcourses.berkeley.edu. The site can replace the token but can't show it, so even someone with your access code couldn't see it. It's never in the GitHub repo or the Sheet. The hub only reads from bCourses. Keep your access code private, and if it ever leaks, change ACCESS_CODE in the Apps Script project.</p>") +
+      faq("bCourses says the token stopped working.", "<p>Tokens expire on the date you picked when you made one, or stop when regenerated. Make a new one in bCourses and paste it under <a href=\"#/about/sync\">bCourses</a> on this page, with <b>Replace the bCourses token</b>. You can do this from your phone.</p>") +
       faq("Where's the team work for DevEng C200?", "<p>In the Microbe Busters Hub. The DevEng C200 course page has a button to it. Class assignments for that course still show here, since bCourses is where they're turned in.</p>") +
       faq("Does it work on my phone, with a screen reader, or in dark mode?", "<p>Yes. It fits small screens, follows your device's dark mode, and works with a keyboard and screen readers.</p>") +
       "</section></div>";
+  }
+
+  /* bCourses: connection status, the token box, and Check now. The token is sent once to the backend
+     and never comes back, so this page can replace it but can't show it. */
+  function syncSection(s, last) {
+    var connected = !!s.hasToken, since = s.tokenSetAt ? fmtDay(new Date(s.tokenSetAt), true) : "";
+    var status = connected
+      ? '<p class="conn conn--on">' + shape("done") + "<span><b>Connected</b>" + (state.data.me.name ? " as " + esc(state.data.me.name) : "") + (since ? ", token added " + esc(since) : "") + ". Last read " + esc(last) + ".</span></p>"
+      : '<p class="conn">' + shape("todo") + "<span><b>Not connected yet.</b> Paste a bCourses token below to start.</span></p>";
+    var steps = '<ol class="steps token-steps"><li>In bCourses, open <b>Account</b>, then <b>Settings</b>.</li>' +
+      '<li>Under Approved Integrations, choose <b>New Access Token</b>. For Purpose write "Classes Hub", and set the expiry after the semester ends (' + esc(fmtDay(semester().end, true)) + ").</li>" +
+      "<li>Copy the token bCourses shows (it starts with a number and a ~) and paste it here. bCourses only shows it once.</li></ol>";
+    var form = '<form class="token-form" id="token-form" autocomplete="off">' +
+      '<div class="field"><label for="token-input">' + (connected ? "Replace the bCourses token" : "bCourses token") + "</label>" +
+      '<input id="token-input" name="token-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" required' + (state.demo ? " disabled" : "") + ">" +
+      "<small>Checked with bCourses before it's saved. Once saved, it can't be shown again, here or anywhere else on the site.</small></div>" +
+      '<div class="actions" style="margin-top:0"><button type="submit" class="btn btn--solid"' + (state.demo ? " disabled" : "") + ">" + (connected ? "Replace token" : "Connect bCourses") + "</button>" +
+      (connected ? '<button type="button" class="btn btn--quiet" data-act="clear-token">Disconnect bCourses</button>' : "") + "</div></form>";
+    return '<section class="section" id="sync" aria-labelledby="sync-h"><h2 id="sync-h" tabindex="-1">bCourses</h2>' + status +
+      (s.syncError ? '<p class="error">' + esc(s.syncError) + "</p>" : "") +
+      (connected ? '<div class="actions"><button type="button" class="btn" data-act="sync-now"' + (state.demo ? " disabled" : "") + ">Check bCourses now</button></div>" : "") +
+      (connected ? '<details class="token-more"><summary>Replace or remove the token</summary>' + steps + form + "</details>" : steps + form) +
+      (state.demo ? '<p class="section__note">The token box is off in demo mode.</p>' : "") +
+      (store.get("code") ? '<div class="actions"><button type="button" class="btn btn--quiet" data-act="forget-code">Forget the access code on this device</button></div>' : "") +
+      (s.calendar === false ? "" : '<p class="section__note" style="margin-top:16px">Every due date is also on your "' + esc((cfg.semesterLabel || "") + " classes") + '" Google Calendar, which the hub keeps up to date. Nobody is invited to those events.</p>') + "</section>";
+  }
+  function saveToken(form) {
+    var input = form.querySelector("#token-input"), btn = form.querySelector('[type="submit"]'), token = input.value.replace(/\s+/g, "");
+    input.value = "";   // never left sitting in the page
+    var old = form.querySelector(".error"); if (old) old.remove();
+    if (!token) { input.focus(); return; }
+    var label = btn.textContent; btn.disabled = true; btn.classList.add("is-working"); btn.textContent = "Checking with bCourses";
+    apiPost({ action: "setToken", token: token }, "Checking the token with bCourses").then(function (r) {
+      token = "";
+      if (r.data) setData(r.data);
+      refresh();
+      var h = document.getElementById("sync-h"); if (h) h.focus();
+      var res = r.result || {};
+      toast("bCourses connected" + (r.name ? " as " + r.name : "") + (res.courses != null ? ". Read " + plural(res.courses, "course") + " and " + plural(res.items || 0, "assignment") : ""));
+    }).catch(function (e) {
+      token = "";
+      btn.disabled = false; btn.classList.remove("is-working"); btn.textContent = label;
+      var err = document.createElement("p"); err.className = "error"; err.setAttribute("role", "alert"); err.textContent = e.message || "The token wasn't saved.";
+      form.appendChild(err); input.focus();
+    });
+  }
+  function confirmClearToken() {
+    openDialog('<form method="dialog">' + dlgHead("Disconnect bCourses?") + '<div class="dlg__body"><p>The hub stops reading bCourses until you paste a new token. Everything it already read stays here.</p>' +
+      "<p>This removes the token from the hub only. To switch it off on bCourses too, delete it under Account, then Settings, on bCourses.</p></div>" +
+      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it connected</button><button type="submit" class="btn btn--solid">Disconnect</button></div></form>', function () {
+      return apiPost({ action: "clearToken" }).then(function (r) {
+        state.data.settings.hasToken = false; state.data.settings.tokenSetAt = ""; showNotice(); refresh();
+        toast("bCourses disconnected" + (r.demo ? " (demo, nothing changed)" : ""));
+      });
+    });
   }
 
   function viewGate(msg) {
@@ -649,6 +700,7 @@
         refresh(); toast(r.result ? "Read " + plural(r.result.courses, "course") + " and " + plural(r.result.items, "assignment") : "Checked bCourses");
       }).catch(function (e) { toast("Couldn't check bCourses: " + e.message); refresh(); });
     }
+    if (act === "clear-token") confirmClearToken();
     if (act === "send-digest") {
       b.disabled = true;
       apiPost({ action: "sendDigest" }, "Sending").then(function (r) { toast(r.sent ? "Sent. Check your inbox." : "Nothing to send right now."); })
@@ -657,6 +709,7 @@
   });
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "all-filter" || ev.target.id === "news-filter") { ev.preventDefault(); return; }
+    if (ev.target.id === "token-form") { ev.preventDefault(); saveToken(ev.target); return; }
     if (ev.target.id !== "gate") return;
     ev.preventDefault();
     store.set("code", document.getElementById("code").value.trim());

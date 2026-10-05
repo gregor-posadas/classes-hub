@@ -140,4 +140,13 @@ t('htmlToText handles headings, tables and relative and odd links', () => {
   assert.ok(s.includes('[Page](https://bcourses.berkeley.edu/courses/1/pages/a%20%28b%29)'), s);
 });
 
+t('cleanToken accepts a pasted token and rejects junk', () => {
+  const tok = '1072~' + 'aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3aB5cD7eF9gH1jK3mN5pQ7';
+  assert.strictEqual(ctx.cleanToken('  ' + tok + '\n'), tok);
+  assert.strictEqual(ctx.cleanToken(tok.slice(0, 20) + ' ' + tok.slice(20)), tok);
+  assert.strictEqual(ctx.cleanToken(''), '');
+  assert.strictEqual(ctx.cleanToken('my password'), '');
+  assert.strictEqual(ctx.cleanToken('<script>alert(1)</script>xxxxxxxxxxxx'), '');
+});
+
 console.log(n + ' checks passed');
