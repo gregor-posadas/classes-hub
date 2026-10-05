@@ -321,8 +321,16 @@
     var a = fmtTime(evStart(e)), b = fmtTime(evEnd(e)), pa = a.slice(-2), pb = b.slice(-2);
     return (pa === pb ? a.slice(0, -3) : a) + " to " + b;
   }
+  /* Google opens calendar and Meet links in your first signed-in account unless told otherwise. A calendar whose id
+     is an email address (your berkeley.edu calendar, say) belongs to that account, so its links say so with authuser. */
+  function eventAccount(e) {
+    var c = gcal().calendars.filter(function (x) { return x.name === e.calendar; })[0];
+    var id = c ? String(c.id) : "";
+    return /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(id) && !/calendar\.google\.com$/i.test(id) ? id : "";
+  }
+  function asAccount(url, acct) { return url && acct ? url + (url.indexOf("?") > -1 ? "&" : "?") + "authuser=" + encodeURIComponent(acct) : url; }
   function eventRow(e) {
-    var url = safeUrl(e.url), meet = safeUrl(e.meetLink), past = !e.allDay && evEnd(e) < new Date();
+    var acct = eventAccount(e), url = asAccount(safeUrl(e.url), acct), meet = asAccount(safeUrl(e.meetLink), acct), past = !e.allDay && evEnd(e) < new Date();
     var when = (e._showDay ? dayName(evStart(e)) + ", " : "") + evWhen(e);
     return '<li class="evt' + (past ? " is-past" : "") + '" data-peek="e:' + esc(e.id) + '"><span class="evt__time">' + esc(when) + "</span>" +
       '<span class="evt__main">' + (url ? '<a class="evt__title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(e.title) + newTab() + "</a>" : '<span class="evt__title">' + esc(e.title) + "</span>") +
@@ -413,52 +421,64 @@
         hidden.map(function (c) { return '<li><a href="#/c/' + esc(c.id) + '">' + chip(c) + "</a> " + esc(c.name) + "</li>"; }).join("") + "</ul></section>" : "") + "</div>";
   }
 
-  /* This week, laptop first: Today leads (your schedule and what's due today), then anything overdue,
-     then the rest of the week through Sunday. The side column holds the clock, the month, the semester and announcements. */
+  /* This week, laptop first. The main column is coursework only: a strip for the whole week, anything overdue,
+     today, then each remaining day through Sunday. Your calendar lives in the side column with the clock. */
   function viewHome() {
-    var all = items(), now = new Date(), sem = semester(), today = dayNumber(now), sunday = weekOf(now) + 6;
+    var all = items(), now = new Date(), sem = semester(), today = dayNumber(now), monday = weekOf(now), sunday = monday + 6;
     var open = all.filter(function (it) { return !isDone(it); }).sort(sortByDue);
     var overdue = open.filter(function (it) { var d = due(it); return d && d < now; });
-    var dueToday = open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) === today; });
-    var doneToday = all.filter(function (it) { return isDone(it) && due(it) && dayNumber(due(it)) === today; }).length;
-    var evsToday = state.data.calendar ? eventsOn(today) : [];
-    var rest = open.filter(function (it) { var d = due(it); return d && dayNumber(d) > today && dayNumber(d) <= sunday; });
+    var onDay = function (dn) { return open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) === dn; }); };
+    var doneOn = function (dn) { return all.filter(function (it) { return isDone(it) && due(it) && dayNumber(due(it)) === dn; }).length; };
     var nextWeek = open.filter(function (it) { var d = due(it); return d && dayNumber(d) > sunday && dayNumber(d) <= sunday + 7; }).length;
 
-    var todayHtml = '<section class="today" aria-labelledby="td-h"><div class="today__head"><h2 id="td-h">Today</h2><p>' + esc(fmtLongDay(now)) + "</p></div>" +
-      (state.data.calendar ? '<div class="today__block"><h3 class="today__h">Schedule</h3>' +
-        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : evsToday.length ? eventList(evsToday) : '<p class="empty empty--tight">Nothing on your calendar today.</p>') + "</div>" : "") +
-      '<div class="today__block"><h3 class="today__h">Due today' + (doneToday ? ' <span class="day__count">' + doneToday + " done</span>" : "") + "</h3>" +
-      (dueToday.length ? rows(dueToday) : '<p class="empty empty--tight">' + (doneToday ? "All done for today." : "Nothing due today.") + "</p>") + "</div></section>";
+    // The week at a glance: one tile per day, Monday to Sunday.
+    var tiles = [];
+    for (var dn = monday; dn <= sunday; dn++) {
+      var dd = noonOf(dn), list = dn < today ? [] : onDay(dn), done = doneOn(dn), wd = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(dd);
+      var dots = list.slice(0, 4).map(function (it) { var c = course(it.courseId); return '<i class="mc__dot" style="--c:' + esc(c ? c.color : "var(--ink)") + '"></i>'; }).join("");
+      var label = fmtDay(dd) + (dn === today ? ", today" : "") + ": " + (dn < today ? "past" : list.length ? plural(list.length, "thing") + " due" : "nothing due") + (done ? ", " + done + " done" : "");
+      tiles.push('<li><a class="wk__day' + (dn === today ? " is-today" : "") + (dn < today ? " is-past" : "") + (list.length ? " has-due" : "") + '" href="#/d/' + isoDay(dn) + '" data-peek="d:' + isoDay(dn) + '" aria-label="' + esc(label) + '">' +
+        '<span class="wk__wd" aria-hidden="true">' + esc(wd) + '</span><span class="wk__n" aria-hidden="true">' + new Date(dn * DAY).getUTCDate() + "</span>" +
+        '<span class="wk__count" aria-hidden="true">' + (dn < today ? "" : list.length ? list.length + " due" : "Free") + '</span><span class="wk__dots" aria-hidden="true">' + dots + "</span></a></li>");
+    }
+    var strip = '<nav class="wk" aria-label="This week, day by day"><ol>' + tiles.join("") + "</ol></nav>";
+
+    var dueToday = onDay(today), doneToday = doneOn(today);
+    var todayHtml = '<section class="section day--today" aria-labelledby="td-h"><h2 id="td-h">Due today <span class="h-count">' + esc(fmtLongDay(now)) + "</span></h2>" +
+      (dueToday.length ? rows(dueToday) : '<p class="empty">' + (doneToday ? "All done for today." : "Nothing due today.") + "</p>") +
+      (doneToday && dueToday.length ? '<p class="section__note">' + doneToday + " already done today.</p>" : "") + "</section>";
 
     var groups = [];
-    for (var dn = today + 1; dn <= sunday; dn++) {
-      var list = rest.filter(function (it) { return dayNumber(due(it)) === dn; });
-      if (!list.length) continue;
-      var d = noonOf(dn), nm = dayName(d);
-      groups.push('<div class="day"><h3 class="day__h"><a href="#/d/' + isoDay(dn) + '">' + esc(nm) + "</a>" + (nm === fmtDay(d) ? "" : ' <span class="day__date">' + esc(fmtDay(d)) + "</span>") +
-        ' <span class="day__count">' + plural(list.length, "thing") + " due</span></h3>" + rows(list) + "</div>");
+    for (var d2 = today + 1; d2 <= sunday; d2++) {
+      var l2 = onDay(d2);
+      if (!l2.length) continue;
+      var dt = noonOf(d2), nm = dayName(dt);
+      groups.push('<div class="day"><h3 class="day__h"><a href="#/d/' + isoDay(d2) + '">' + esc(nm) + "</a>" + (nm === fmtDay(dt) ? "" : ' <span class="day__date">' + esc(fmtDay(dt)) + "</span>") +
+        ' <span class="day__count">' + plural(l2.length, "thing") + " due</span></h3>" + rows(l2) + "</div>");
     }
-    var restHtml = '<section class="section" aria-labelledby="rw-h"><h2 id="rw-h">' + (today === sunday ? "Next week" : "Rest of this week") + "</h2>" +
-      (today === sunday ? '<p class="empty">Today is the last day of the week. ' + (nextWeek ? '<a href="#/all">' + plural(nextWeek, "thing") + " due next week</a>." : "Nothing due next week yet.") + "</p>"
-        : (groups.length ? groups.join("") : '<p class="empty">Nothing else due through Sunday.</p>') +
-          (nextWeek ? '<p class="section__note"><a href="#/all">' + plural(nextWeek, "thing") + " due next week</a></p>" : "")) +
-      '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>';
+    var restHtml = today === sunday
+      ? '<section class="section" aria-labelledby="rw-h"><h2 id="rw-h">Next week</h2><p class="empty">' + (nextWeek ? '<a href="#/all">' + plural(nextWeek, "thing") + " due next week</a>." : "Nothing due next week yet.") + "</p>"
+      : '<section class="section" aria-labelledby="rw-h"><h2 id="rw-h">Later this week</h2>' + (groups.length ? groups.join("") : '<p class="empty">Nothing else due through Sunday.</p>') +
+        (nextWeek ? '<p class="section__note"><a href="#/all">' + plural(nextWeek, "thing") + " due next week</a></p>" : "");
+    restHtml += '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>';
 
+    var evsToday = state.data.calendar ? eventsOn(today) : [];
     var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && now - new Date(n.postedAt) < 7 * DAY; });
     var rail = '<aside class="rail" aria-label="Clock, calendar and announcements">' +
       '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" +
+      (state.data.calendar ? '<section class="rail__sec" aria-labelledby="sc-h"><h2 id="sc-h">Today\'s schedule</h2>' +
+        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : evsToday.length ? eventList(evsToday) : '<p class="empty">Nothing on your calendar today.</p>') + "</section>" : "") +
       progressHtml() +
       '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (recent.length ? ' <span class="h-count">' + recent.length + " this week</span>" : "") + "</h2>" +
       (recent.length ? newsCompact(recent.slice(0, 5)) : '<p class="empty">No announcements this week.</p>') +
       '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
 
-    var weekLeft = rest.length + dueToday.length;
+    var weekLeft = open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) <= sunday; }).length;
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + (sem.before || sem.after ? "" : "Week " + sem.week + " of " + sem.weeks + ". ") +
       (overdue.length ? plural(overdue.length, "thing") + " overdue, " : "") + plural(weekLeft, "thing") + " still due through Sunday.</p></div>" +
-      '<div class="home"><div class="home__main">' + todayHtml +
+      '<div class="home"><div class="home__main">' + strip +
       (overdue.length ? '<section class="section section--alert" aria-labelledby="od-h"><h2 id="od-h">Overdue</h2>' + rows(overdue) + "</section>" : "") +
-      restHtml + "</div>" + rail + "</div></div>";
+      todayHtml + restHtml + "</div>" + rail + "</div></div>";
   }
 
   function newsCompact(list) {
@@ -1095,7 +1115,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005072656";
+  var BUILD = "20261005073553";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

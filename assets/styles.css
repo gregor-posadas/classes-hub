@@ -605,3 +605,21 @@ a.evt__title:hover { text-decoration: underline; }
 .peek__list li { display: block; }
 .peek__list li .cbadge { margin-right: 4px; }
 .peek__sub { display: block; font-size: 0.85em; }
+
+/* ---------- The week at a glance ---------- */
+.wk { margin: 8px 0 28px; }
+.wk ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 2px solid var(--rule-strong); }
+.wk li + li { border-left: 1px solid var(--rule); }
+.wk__day { display: grid; gap: 2px; justify-items: center; padding: 10px 4px 10px; text-decoration: none; min-height: 104px; background: var(--surface); }
+.wk__day:hover { background: var(--sunk); }
+.wk__wd { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.wk__n { font-size: var(--f3); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; min-width: 1.7em; text-align: center; border-radius: 999px; }
+.wk__count { font-size: var(--f1); color: var(--ink-2); }
+.wk__day.has-due .wk__count { color: var(--ink); font-weight: 700; }
+.wk__dots { display: flex; gap: 3px; min-height: 8px; }
+.wk__day.is-past { background: var(--paper); }
+.wk__day.is-past .wk__n, .wk__day.is-past .wk__wd { color: var(--ink-2); font-weight: 400; }
+.wk__day.is-today { box-shadow: inset 0 0 0 3px var(--ink); }
+.wk__day.is-today .wk__n { background: var(--ink); color: var(--paper); }
+@media (max-width: 559px) { .wk__day { min-height: 88px; padding: 8px 2px; } .wk__count { font-size: 0.7rem; } }
+.day--today > h2 .h-count { font-weight: 400; }
