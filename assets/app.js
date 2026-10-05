@@ -154,11 +154,13 @@
 
   function rowHtml(it, hideCourse) {
     var d = due(it), k = statusKey(it), c = course(it.courseId);
-    var meta = badge(it) + (hideCourse ? "" : chip(c)) + (pts(it) ? "<span>" + esc(pts(it)) + "</span>" : "") + (it.kind === "mine" ? "<span>Your to-do</span>" : "");
-    return '<li class="row' + (k === "done" ? " is-done" : "") + '"><a href="#/i/' + esc(it.id) + '">' +
+    var meta = badge(it) + (hideCourse ? "" : chip(c)) + (pts(it) ? "<span>" + esc(pts(it)) + "</span>" : "") + (it.kind === "mine" ? "<span>Your to-do</span>" : "") +
+      (it.kind === "team" ? '<span class="tag-team">' + esc(teamName()) + "</span>" : "");
+    return '<li class="row' + (k === "done" ? " is-done" : "") + '" data-peek="i:' + esc(it.id) + '"><a href="#/i/' + esc(it.id) + '">' +
       '<span class="row__main"><span class="row__title">' + esc(it.title) + '</span><span class="row__meta">' + meta + "</span></span>" +
       '<span class="row__due"><span class="row__day">' + (d ? esc(fmtDay(d)) + ", " + esc(fmtTime(d)) : "No due date") + '</span><span class="row__rel">' + (d || k === "done" ? esc(relDue(d, k === "done")) : "") + "</span></span></a></li>";
   }
+  function teamName() { var t = (state.data.settings && state.data.settings.teamHub) || {}; return (t.name || "Microbe Busters Hub").replace(/ Hub$/, ""); }
   function rows(list, hideCourse) { return '<ul class="rows">' + list.map(function (x) { return rowHtml(x, hideCourse); }).join("") + "</ul>"; }
 
   /* ---------- demo data stays current: shift its dates to this week ---------- */
@@ -169,6 +171,10 @@
     var move = function (o, keys) { keys.forEach(function (k) { if (o[k]) o[k] = new Date(new Date(o[k]).getTime() + ms).toISOString(); }); };
     d.items.forEach(function (it) { move(it, ["due", "unlockAt", "submittedAt", "updatedAt", "firstSeenAt"]); });
     d.announcements.forEach(function (n) { move(n, ["postedAt"]); });
+    ((d.calendar || {}).events || []).forEach(function (e) {
+      if (e.allDay) ["start", "end"].forEach(function (k) { e[k] = new Date(new Date(e[k] + "T12:00:00Z").getTime() + ms).toISOString().slice(0, 10); });
+      else move(e, ["start", "end"]);
+    });
     move(d.settings, ["lastSync", "lastSyncOk"]);
     return d;
   }
@@ -202,6 +208,7 @@
   }
   function setData(d) {
     d.courses = d.courses || []; d.items = d.items || []; d.announcements = d.announcements || []; d.settings = d.settings || {}; d.me = d.me || {};
+    d.calendar = d.calendar || null; d.settings.teamHub = d.settings.teamHub || null;
     state.data = d;
     showNotice();
   }
@@ -298,42 +305,139 @@
       meter("prog-work", "of the work due so far is done", wpct, turnedIn + " of " + dueSoFar.length + " done", "meter--work") + "</div></section>";
   }
 
+  /* ---------- your Google Calendar events ---------- */
+  function gcal() { return state.data.calendar || { calendars: [], events: [], error: "" }; }
+  function evStart(e) { return e.allDay ? new Date(zonedIso(e.start, "00:00")) : new Date(e.start); }
+  function evEnd(e) { return e.allDay ? new Date(zonedIso(e.end, "00:00")) : new Date(e.end); }
+  function eventsOn(dn) {
+    return gcal().events.filter(function (e) {
+      var a = dayNumber(evStart(e)), b = e.allDay ? dayNumber(evEnd(e)) - 1 : dayNumber(new Date(evEnd(e).getTime() - 1));
+      return a <= dn && dn <= Math.max(a, b);
+    }).sort(function (x, y) { return (y.allDay - x.allDay) || (evStart(x) - evStart(y)); });
+  }
+  /* "10:00 to 10:45 AM", or "11:30 AM to 1:00 PM" when it crosses noon. */
+  function evWhen(e) {
+    if (e.allDay) return "All day";
+    var a = fmtTime(evStart(e)), b = fmtTime(evEnd(e)), pa = a.slice(-2), pb = b.slice(-2);
+    return (pa === pb ? a.slice(0, -3) : a) + " to " + b;
+  }
+  function eventRow(e) {
+    var url = safeUrl(e.url), meet = safeUrl(e.meetLink), past = !e.allDay && evEnd(e) < new Date();
+    var when = (e._showDay ? dayName(evStart(e)) + ", " : "") + evWhen(e);
+    return '<li class="evt' + (past ? " is-past" : "") + '" data-peek="e:' + esc(e.id) + '"><span class="evt__time">' + esc(when) + "</span>" +
+      '<span class="evt__main">' + (url ? '<a class="evt__title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(e.title) + newTab() + "</a>" : '<span class="evt__title">' + esc(e.title) + "</span>") +
+      '<span class="evt__cal">' + esc(e.calendar) + (e.tentative ? ", maybe" : "") + (e.location ? ", " + esc(e.location) : "") + "</span></span>" +
+      (meet && !past ? '<a class="evt__join" href="' + esc(meet) + '" target="_blank" rel="noopener">Join<span class="sr"> ' + esc(e.title) + " (opens in a new tab)</span></a>" : "") + "</li>";
+  }
+  function eventList(list) { return '<ul class="evts">' + list.map(eventRow).join("") + "</ul>"; }
+  function showEvents() { return store.get("showEvents") !== "0"; }
+  function isoDay(dn) { return new Date(dn * DAY).toISOString().slice(0, 10); }
+  function dayFromIso(iso) { var p = String(iso || "").split("-"); return p.length === 3 ? Date.UTC(+p[0], +p[1] - 1, +p[2]) / DAY : NaN; }
+  function noonOf(dn) { return new Date(zonedIso(isoDay(dn), "12:00")); }
+
+  /* ---------- clock and month calendar ---------- */
+  var calMonth = null;   // { y, m } being shown; null means this month
+  function clockText() { return fmtTime(new Date()); }
+  function monthHtml() {
+    var now = new Date(), p = parts(now), y = calMonth ? calMonth.y : +p.year, m = calMonth ? calMonth.m : +p.month;
+    var first = Date.UTC(y, m - 1, 1) / DAY, days = new Date(Date.UTC(y, m, 0)).getUTCDate(), today = dayNumber(now);
+    var lead = (new Date(first * DAY).getUTCDay() + 6) % 7, cells = [];
+    var open = items().filter(function (it) { return due(it) && !isDone(it); });
+    var byDay = {}; open.forEach(function (it) { var k = dayNumber(due(it)); (byDay[k] = byDay[k] || []).push(it); });
+    for (var i = 0; i < lead; i++) cells.push('<span class="mc__pad" aria-hidden="true"></span>');
+    for (var d = 0; d < days; d++) {
+      var dn = first + d, dueList = byDay[dn] || [], evs = eventsOn(dn), date = noonOf(dn);
+      var label = fmtDay(date) + (dn === today ? ", today" : "") + ": " + (dueList.length ? plural(dueList.length, "thing") + " due" : "nothing due") + (evs.length ? ", " + plural(evs.length, "event") : "");
+      var dots = dueList.slice(0, 3).map(function (it) { var c = course(it.courseId); return '<i class="mc__dot" style="--c:' + esc(c ? c.color : "var(--ink)") + '"></i>'; }).join("") + (dueList.length > 3 ? '<i class="mc__more">+</i>' : "");
+      cells.push('<a class="mc__day' + (dn === today ? " is-today" : "") + (dn < today ? " is-past" : "") + (dueList.length ? " has-due" : "") + '" href="#/d/' + isoDay(dn) + '" aria-label="' + esc(label) + '">' +
+        '<span class="mc__n" aria-hidden="true">' + (d + 1) + '</span><span class="mc__marks" aria-hidden="true">' + dots + (evs.length ? '<i class="mc__evt"></i>' : "") + "</span></a>");
+    }
+    var title = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(first * DAY + 12 * 3600000));
+    return '<div class="mc" id="month"><div class="mc__head"><button type="button" class="mc__nav" data-act="cal-prev" aria-label="Previous month">‹</button><h3 class="mc__title" aria-live="polite">' + esc(title) + "</h3>" +
+      '<button type="button" class="mc__nav" data-act="cal-next" aria-label="Next month">›</button></div>' +
+      '<div class="mc__grid">' + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(function (w) { return '<abbr class="mc__wd" title="' + w + '">' + w.charAt(0) + "</abbr>"; }).join("") + cells.join("") + "</div>" +
+      '<p class="mc__key"><span><i class="mc__dot" style="--c:var(--ink)"></i> due, in its course color</span>' + (gcal().events.length ? '<span><i class="mc__evt"></i> on your calendar</span>' : "") + "</p>" +
+      (calMonth ? '<button type="button" class="btn btn--quiet mc__today" data-act="cal-today">Back to this month</button>' : "") + "</div>";
+  }
+  function clockHtml() {
+    var sem = semester(), now = new Date();
+    return '<div class="clock"><p class="clock__time" data-clock="time">' + esc(clockText()) + '</p><p class="clock__date" data-clock="date">' + esc(fmtLongDay(now)) + "</p>" +
+      (sem.before || sem.after ? "" : '<p class="clock__week">Week ' + sem.week + " of " + sem.weeks + ", " + plural(sem.left, "day") + " left</p>") + "</div>";
+  }
+
   function viewHome() {
-    var all = items(), now = new Date(), week = new Date(now.getTime() + 7 * DAY), sem = semester();
+    var all = items(), now = new Date(), week = new Date(now.getTime() + 7 * DAY), sem = semester(), today = dayNumber(now);
     var open = all.filter(function (it) { return !isDone(it); }).sort(sortByDue);
     var overdue = open.filter(function (it) { var d = due(it); return d && d < now; });
     var next = open.filter(function (it) { var d = due(it); return d && d >= now && d <= week; });
     var later = open.filter(function (it) { var d = due(it); return d && d > week; }).length;
-    var groups = {}, order = [];
-    next.forEach(function (it) { var k = dayNumber(due(it)); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(it); });
-    var nextHtml = order.length ? order.map(function (k) {
-      var d = due(groups[k][0]);
-      return '<div class="day"><h3 class="day__h">' + esc(dayName(d)) + (dayName(d) === fmtDay(d) ? "" : ' <span class="day__date">' + esc(fmtDay(d)) + "</span>") + "</h3>" + rows(groups[k]) + "</div>";
-    }).join("") : '<p class="empty">Nothing due in the next 7 days.</p>';
+    var withEvents = showEvents() && gcal().events.length;
+    var dayBlocks = [];
+    for (var dn = today; dn < today + 7; dn++) {
+      var due7 = next.filter(function (it) { return dayNumber(due(it)) === dn; });
+      var evs = withEvents ? eventsOn(dn) : [];
+      if (!due7.length && !evs.length) continue;
+      var d = noonOf(dn), nm = dayName(d);
+      dayBlocks.push('<div class="day"><h3 class="day__h"><a href="#/d/' + isoDay(dn) + '">' + esc(nm) + "</a>" + (nm === fmtDay(d) ? "" : ' <span class="day__date">' + esc(fmtDay(d)) + "</span>") +
+        (due7.length ? ' <span class="day__count">' + plural(due7.length, "thing") + " due</span>" : "") + "</h3>" +
+        (evs.length ? eventList(evs) : "") + (due7.length ? rows(due7) : "") + "</div>");
+    }
+    var nextHtml = dayBlocks.length ? dayBlocks.join("") : '<p class="empty">Nothing due in the next 7 days.</p>';
+    var toggle = gcal().events.length ? '<label class="check check--sm"><input type="checkbox" id="show-events"' + (showEvents() ? " checked" : "") + "> Show my calendar events</label>" : "";
 
     var cards = visibleCourses().map(function (c) {
       var list = all.filter(function (it) { return it.courseId === c.id; }), n = counts(list);
       var up = list.filter(function (it) { return !isDone(it) && due(it) && due(it) >= now; }).sort(sortByDue)[0];
-      var cs = '<span class="count">' + shape("late") + "<span><b>" + n.late + "</b> overdue</span></span>";
-      cs = (n.late ? cs : "") + '<span class="count">' + shape("todo") + "<span><b>" + n.week + "</b> due in 7 days</span></span>" + '<span class="count">' + shape("done") + "<span><b>" + n.done + "</b> done</span></span>";
+      var cs = (n.late ? '<span class="count">' + shape("late") + "<span><b>" + n.late + "</b> overdue</span></span>" : "") +
+        '<span class="count">' + shape("todo") + "<span><b>" + n.week + "</b> due in 7 days</span></span>" + '<span class="count">' + shape("done") + "<span><b>" + n.done + "</b> done</span></span>";
       return '<a class="sign" href="#/c/' + esc(c.id) + '">' + cbadge(c, "lg") + '<span><span class="sign__name">' + esc(c.shortName || c.code) + '</span><br><span class="sign__role">' + esc(c.name) + "</span>" +
         '<span class="sign__counts">' + cs + "</span>" +
         (up ? '<p class="sign__next">Next up<b>' + esc(up.title) + "</b>" + esc(fmtDay(due(up)) + ", " + fmtTime(due(up))) + "</p>" : '<p class="sign__next">Nothing coming up.</p>') + "</span></a>";
     }).join("");
 
-    var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && now - new Date(n.postedAt) < 7 * DAY; }).slice(0, 4);
-    var newsHtml = recent.length ? '<section class="section" aria-labelledby="hn-h"><h2 id="hn-h">Announcements this week</h2>' + newsList(recent, true) +
-      '<div class="actions"><a class="btn" href="#/news">All announcements</a></div></section>' : "";
+    // The side column: clock and month, what's next on your calendar, and announcements.
+    var upNext = gcal().events.filter(function (e) { return !e.allDay && evEnd(e) > now; }).slice(0, 3);
+    var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && now - new Date(n.postedAt) < 7 * DAY; });
+    var rail = '<aside class="rail" aria-label="Calendar and announcements">' +
+      '<section class="card" aria-labelledby="cal-h"><h2 id="cal-h" class="sr">Clock and calendar</h2>' + clockHtml() + monthHtml() + "</section>" +
+      (state.data.calendar ? '<section class="rail__sec" aria-labelledby="up-h"><h2 id="up-h">Up next on your calendar</h2>' +
+        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : upNext.length ? eventList(upNext.map(function (e) { var x = Object.assign({}, e); x._showDay = true; return x; })) : '<p class="empty">Nothing else on your calendar soon.</p>') + "</section>" : "") +
+      '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (recent.length ? ' <span class="h-count">' + recent.length + " this week</span>" : "") + "</h2>" +
+      (recent.length ? newsCompact(recent.slice(0, 5)) : '<p class="empty">No announcements this week.</p>') +
+      '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
 
-    return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + esc(fmtLongDay(now)) + (sem.before || sem.after ? "" : ". Week " + sem.week + " of " + sem.weeks) + ". " +
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + esc(fmtLongDay(now)) + ', <span data-clock="time">' + esc(clockText()) + "</span>" + (sem.before || sem.after ? "" : ". Week " + sem.week + " of " + sem.weeks) + ". " +
       (overdue.length ? plural(overdue.length, "thing") + " overdue, " : "") + plural(next.length, "thing") + " due in the next 7 days.</p></div>" +
       progressHtml() +
+      '<div class="home"><div class="home__main">' +
       (overdue.length ? '<section class="section section--alert" aria-labelledby="od-h"><h2 id="od-h">Overdue</h2>' + rows(overdue) + "</section>" : "") +
-      '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Next 7 days</h2>' + nextHtml +
+      '<section class="section" aria-labelledby="nx-h"><div class="h-row"><h2 id="nx-h">Next 7 days</h2>' + toggle + "</div>" + nextHtml +
       (later ? '<p class="section__note"><a href="#/all">' + plural(later, "more thing") + " due after that</a></p>" : "") +
-      '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>' +
+      '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section></div>' + rail + "</div>" +
       '<section class="section" aria-labelledby="cs-h"><h2 id="cs-h">Courses</h2>' + (cards ? '<div class="signs">' + cards + "</div>" : (state.data.settings.hasToken ? '<p class="empty">No courses yet. They show up after the first bCourses check.</p>' : '<p class="empty">No courses yet. <a href="#/about/sync">Connect bCourses</a> and they show up right away.</p>')) + "</section>" +
-      newsHtml + "</div>";
+      "</div>";
+  }
+
+  function newsCompact(list) {
+    return '<ul class="newsc">' + list.map(function (n) {
+      var c = course(n.courseId), at = n.postedAt ? new Date(n.postedAt) : null, url = safeUrl(n.url);
+      return '<li data-peek="n:' + esc(n.id) + '"><p class="newsc__meta">' + chip(c) + "<span>" + (at ? esc(dayName(at)) : "") + "</span></p>" +
+        (url ? '<a class="newsc__title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(n.title) + newTab() + "</a>" : '<span class="newsc__title">' + esc(n.title) + "</span>") + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  /* One day: your calendar and everything due. Reached from the month calendar and the day headings. */
+  function viewDay(iso) {
+    var dn = dayFromIso(iso);
+    if (isNaN(dn)) return notFound("That date isn't right.");
+    var d = noonOf(dn), list = items().filter(function (it) { return due(it) && dayNumber(due(it)) === dn; }).sort(sortByDue);
+    var evs = eventsOn(dn), open = list.filter(function (it) { return !isDone(it); }), done = list.filter(isDone);
+    return '<div class="wrap"><div class="head"><a class="crumb" href="#/">This week</a><h1 tabindex="-1">' + esc(fmtLongDay(d)) + "</h1>" +
+      "<p>" + (dn === dayNumber(new Date()) ? "Today. " : "") + plural(open.length, "thing") + " due" + (done.length ? ", " + done.length + " done" : "") + (state.data.calendar ? ", " + plural(evs.length, "event") + " on your calendar" : "") + ".</p>" +
+      '<nav class="jump" aria-label="Other days"><a href="#/d/' + isoDay(dn - 1) + '">‹ ' + esc(fmtDay(noonOf(dn - 1))) + '</a><a href="#/d/' + isoDay(dn + 1) + '">' + esc(fmtDay(noonOf(dn + 1))) + " ›</a></nav></div>" +
+      (state.data.calendar ? '<section class="section" aria-labelledby="dc-h"><h2 id="dc-h">On your calendar</h2>' + (evs.length ? eventList(evs) : '<p class="empty">Nothing on your calendar.</p>') + "</section>" : "") +
+      '<section class="section" aria-labelledby="dd-h"><h2 id="dd-h">Due</h2>' + (open.length ? rows(open) : '<p class="empty">Nothing due.</p>') +
+      (done.length ? '<details class="done-list"><summary>Done (' + done.length + ")</summary>" + rows(done) + "</details>" : "") + "</section></div>";
   }
 
   function viewCourse(id) {
@@ -368,10 +472,11 @@
   function viewItem(id) {
     var it = byId(state.data.items, id);
     if (!it) return notFound("This assignment is no longer on bCourses, or the link is wrong.");
-    var c = course(it.courseId), d = due(it), k = statusKey(it), mine = it.kind === "mine";
+    var c = course(it.courseId), d = due(it), k = statusKey(it), mine = it.kind === "mine", team = it.kind === "team";
     var unlock = it.unlockAt && new Date(it.unlockAt) > new Date() ? '<p class="section__note">Opens on bCourses ' + esc(fmtDay(new Date(it.unlockAt))) + ", " + esc(fmtTime(new Date(it.unlockAt))) + ".</p>" : "";
     var canvasLine = "";
-    if (!mine) {
+    if (team) canvasLine = "Your assignment in the " + teamName() + " Hub" + (it.project ? ", for " + it.project : "") + ". Changing your progress here changes it there too.";
+    else if (!mine) {
       if (it.submitted === "yes") canvasLine = "bCourses shows this " + (it.grade === "Excused" ? "excused" : "submitted" + (it.submittedAt ? " " + fmtDay(new Date(it.submittedAt)) + ", " + fmtTime(new Date(it.submittedAt)) : "")) + (it.late === "yes" ? ", marked late" : "") + ".";
       else if (it.missing === "yes") canvasLine = "bCourses marks this missing.";
       else if (noSubmit(it)) canvasLine = "Nothing to turn in on bCourses. Mark it done here once you've finished.";
@@ -385,15 +490,15 @@
     var link = safeUrl(it.url), extra = safeUrl(it.link);
     return '<div class="wrap"><div class="detail"><div class="head" style="padding-bottom:0"><a class="crumb" href="' + (c ? "#/c/" + esc(c.id) : "#/") + '">' + esc(c ? c.shortName : "This week") + "</a>" +
       '<div class="detail__who">' + chip(c) + "</div>" +
-      '<h1 tabindex="-1">' + esc(it.title) + '</h1><p class="detail__project">' + (mine ? "Your own to-do" : "From bCourses") + (pts(it) ? ", " + esc(pts(it)) : "") + "</p></div>" +
+      '<h1 tabindex="-1">' + esc(it.title) + '</h1><p class="detail__project">' + (mine ? "Your own to-do" : team ? "From the " + esc(teamName()) + " Hub" : "From bCourses") + (pts(it) ? ", " + esc(pts(it)) : "") + "</p></div>" +
       '<div class="due-block"><div class="due-block__when"><p class="due-block__label">Due</p><p class="due-block__date">' + (d ? esc(fmtDay(d)) + "<br>" + esc(fmtTime(d)) : "No due date") + '</p><p class="due-block__rel">' + esc(relDue(d, k === "done")) + '</p></div><div class="due-block__status">' + badge(it) + "</div></div>" +
       unlock + (canvasLine ? '<p class="canvas-line">' + esc(canvasLine) + "</p>" : "") +
-      '<div class="actions">' + (link ? '<a class="btn btn--solid" href="' + esc(link) + '" target="_blank" rel="noopener">Open on bCourses' + newTab() + "</a>" : "") +
-      (extra ? '<a class="btn' + (link ? "" : " btn--solid") + '" href="' + esc(extra) + '" target="_blank" rel="noopener">Open the link' + newTab() + "</a>" : "") +
+      '<div class="actions">' + (link ? '<a class="btn btn--solid" href="' + esc(link) + '" target="_blank" rel="noopener">' + (team ? "Open in the " + esc(teamName()) + " Hub" : "Open on bCourses") + newTab() + "</a>" : "") +
+      (extra ? '<a class="btn' + (link ? "" : " btn--solid") + '" href="' + esc(extra) + '" target="_blank" rel="noopener">' + (team ? "Open the document" : "Open the link") + newTab() + "</a>" : "") +
       (d ? '<a class="btn" href="' + esc(calendarUrl(it)) + '" target="_blank" rel="noopener">Add to Google Calendar' + newTab() + "</a>" : "") + "</div>" +
       '<fieldset class="picker"><legend>Your progress</legend><div class="picker__opts" data-status-for="' + esc(it.id) + '">' + opts + "</div></fieldset>" +
       (it.submitted === "yes" && it.myStatus !== "done" ? '<p class="section__note">It counts as done because bCourses shows it submitted.</p>' : "") +
-      "<h2>" + (mine ? "Notes" : "Instructions") + "</h2>" + richText(it.description, mine ? "No notes." : "No instructions on bCourses. Open it there for the details.") +
+      "<h2>" + (mine ? "Notes" : team ? "What to do" : "Instructions") + "</h2>" + richText(it.description, mine ? "No notes." : team ? "No steps written in the team hub." : "No instructions on bCourses. Open it there for the details.") +
       (mine ? '<div class="actions"><button type="button" class="btn" data-act="edit-todo" data-id="' + esc(it.id) + '">Edit to-do</button></div>' : "") +
       "</div></div>";
   }
@@ -455,11 +560,11 @@
     var s = state.data.settings, cur = s.emailPref || "daily";
     function faq(q, a) { return '<details class="faq"><summary>' + q + '</summary><div class="faq__a">' + a + "</div></details>"; }
     var legend = [["todo", "To do", "Not started, and not due yet."], ["doing", "In progress", "You marked it as started."], ["done", "Submitted or Done", "Submitted on bCourses, or you marked it done here."], ["late", "Overdue or Missing", "The due date passed and it isn't done. Missing means bCourses flags it too."]].map(function (x) {
-      return '<li><span class="st">' + shape(x[0]) + x[1] + "</span><span>" + x[2] + "</span></li>";
+      return '<li><span class="st legend__k">' + shape(x[0]) + x[1] + '</span><span class="legend__v">' + x[2] + "</span></li>";
     }).join("");
     var last = s.lastSyncOk ? fmtDay(new Date(s.lastSyncOk)) + ", " + fmtTime(new Date(s.lastSyncOk)) : "never";
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">About and settings</h1><p>Your ' + esc(cfg.semesterLabel || "") + ' classes in one place. The hub reads bCourses every 2 hours and keeps a copy in a Google Sheet. It only reads: it never submits, posts or changes anything on bCourses.</p></div>' +
-      syncSection(s, last) +
+      syncSection(s, last) + teamSection(s) + calendarsSection() +
       '<section class="section" id="email" aria-labelledby="email-h"><h2 id="email-h" tabindex="-1">Morning email</h2>' +
       '<p class="section__note">Comes at 8 AM, only on days with something to say: what\'s overdue, what\'s due in the next 2 days, assignments new on bCourses, and announcements. Each item links to its page here.</p>' +
       '<fieldset class="picker picker--email"><legend class="sr">How often you get the morning email</legend><div class="picker__opts" data-email>' +
@@ -472,7 +577,8 @@
       faq("A course I'm not really taking shows up.", "<p>Open the course, choose <b>Course settings</b>, and tick <b>Hide this course</b>. Its work drops off This week, All work, the email and the calendar.</p>") +
       faq("Is the bCourses token safe?", "<p>When you paste it under bCourses above, it goes once, over a secure connection, to the hub's backend in your Google account, which keeps it in its private settings. From then on it's only ever sent to bcourses.berkeley.edu. The site can replace the token but can't show it, so even someone with your access code couldn't see it. It's never in the GitHub repo or the Sheet. The hub only reads from bCourses. Keep your access code private, and if it ever leaks, change ACCESS_CODE in the Apps Script project.</p>") +
       faq("bCourses says the token stopped working.", "<p>Tokens expire on the date you picked when you made one, or stop when regenerated. Make a new one in bCourses and paste it under <a href=\"#/about/sync\">bCourses</a> on this page, with <b>Replace the bCourses token</b>. You can do this from your phone.</p>") +
-      faq("Where's the team work for DevEng C200?", "<p>In the Microbe Busters Hub. The DevEng C200 course page has a button to it. Class assignments for that course still show here, since bCourses is where they're turned in.</p>") +
+      faq("Where's the team work for DevEng C200?", "<p>Your assignments from the Microbe Busters Hub show up here under DevEng C200, with a " + '<span class="tag-team">' + esc(teamName()) + "</span> tag, once the team code is added above. Marking one done here marks it done there too. The team's meetings, deliverables and files stay in the Microbe Busters Hub; the course page has a button to it.</p>") +
+      faq("Which calendar events show up, and who can see them?", "<p>Events from the Google calendars you have switched on in Google Calendar, for the account that runs the hub, from last week to six weeks ahead. Choose which ones above. Only titles, times, places and meeting links come through, never descriptions or guest lists. Anyone with your access code can see them, so keep it private. A calendar from another account (your berkeley.edu one, say) shows up once you add it to this account's Google Calendar.</p>") +
       faq("Does it work on my phone, with a screen reader, or in dark mode?", "<p>Yes. It fits small screens, follows your device's dark mode, and works with a keyboard and screen readers.</p>") +
       "</section></div>";
   }
@@ -501,6 +607,62 @@
       (store.get("code") ? '<div class="actions"><button type="button" class="btn btn--quiet" data-act="forget-code">Forget the access code on this device</button></div>' : "") +
       (s.calendar === false ? "" : '<p class="section__note" style="margin-top:16px">Every due date is also on your "' + esc((cfg.semesterLabel || "") + " classes") + '" Google Calendar, which the hub keeps up to date. Nobody is invited to those events.</p>') + "</section>";
   }
+  /* The Microbe Busters Hub: your assignments there, filed under DevEng C200. The team code works like the token: saved, never shown. */
+  function teamSection(s) {
+    var t = s.teamHub;
+    if (!t) return "";
+    var mine = state.data.items.filter(function (x) { return x.kind === "team"; }).length;
+    var status = t.connected
+      ? '<p class="conn conn--on">' + shape("done") + "<span><b>Connected.</b> " + plural(mine, "assignment") + " of yours" + (t.lastSync ? ", checked " + esc(dayName(new Date(t.lastSync)).toLowerCase() === "today" ? "today at " + fmtTime(new Date(t.lastSync)) : fmtDay(new Date(t.lastSync))) : "") + ".</span></p>"
+      : '<p class="conn">' + shape("todo") + "<span><b>Not connected.</b> Add the team code to bring your " + esc(teamName()) + " assignments in here.</span></p>";
+    var form = '<form class="token-form" id="team-form" autocomplete="off"><div class="field"><label for="team-input">' + (t.connected ? "Replace the team code" : "Team code") + "</label>" +
+      '<input id="team-input" name="team-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" required' + (state.demo ? " disabled" : "") + ">" +
+      "<small>The same code your team enters in the " + esc(t.name) + ". Checked with it before it's saved, and never shown again.</small></div>" +
+      '<div class="actions" style="margin-top:0"><button type="submit" class="btn btn--solid"' + (state.demo ? " disabled" : "") + ">" + (t.connected ? "Replace code" : "Connect") + "</button>" +
+      (t.connected ? '<button type="button" class="btn btn--quiet" data-act="clear-team">Disconnect</button>' : "") + "</div></form>";
+    return '<section class="section" id="team" aria-labelledby="team-h"><h2 id="team-h" tabindex="-1">' + esc(t.name) + "</h2>" + status +
+      (t.error ? '<p class="error">' + esc(t.error) + "</p>" : "") +
+      '<p class="section__note">Your assignments there show up under DevEng C200 with a <span class="tag-team">' + esc(teamName()) + "</span> tag. Marking one done here marks it done there too." +
+      (safeUrl(t.url) ? ' <a href="' + esc(t.url) + '" target="_blank" rel="noopener">Open the ' + esc(t.name) + newTab() + "</a>" : "") + "</p>" +
+      (t.connected ? '<details class="token-more"><summary>Replace or remove the team code</summary>' + form + "</details>" : form) + "</section>";
+  }
+  function calendarsSection() {
+    var g = state.data.calendar;
+    if (!g) return "";
+    var list = g.calendars.length ? '<fieldset class="checks cal-list"><legend>Show events from</legend>' + g.calendars.map(function (c, i) {
+      return '<label class="check"><input type="checkbox" name="cal" value="' + esc(c.id) + '" id="cal-' + i + '"' + (c.included ? " checked" : "") + "> " + esc(c.name) + (c.primary ? " (your main calendar)" : "") + "</label>";
+    }).join("") + '</fieldset><div class="actions"><button type="button" class="btn" data-act="save-calendars"' + (state.demo ? " disabled" : "") + ">Save calendar choices</button></div>" : '<p class="empty">No calendars found.</p>';
+    return '<section class="section" id="calendars" aria-labelledby="gc-h"><h2 id="gc-h" tabindex="-1">Google Calendar</h2>' +
+      '<p class="section__note">Two ways. <b>In:</b> events from the calendars you pick here show on This week, the month calendar and each day\'s page, read only. <b>Out:</b> every due date goes onto your "' + esc((cfg.semesterLabel || "") + " classes") + '" calendar, which is left off this list so nothing shows twice.</p>' +
+      (g.error ? '<p class="error">' + esc(g.error) + "</p>" : "") + list + "</section>";
+  }
+  function saveTeamCode(form) {
+    var input = form.querySelector("#team-input"), btn = form.querySelector('[type="submit"]'), code = input.value.trim();
+    input.value = "";
+    var old = form.querySelector(".error"); if (old) old.remove();
+    if (!code) { input.focus(); return; }
+    var label = btn.textContent; btn.disabled = true; btn.classList.add("is-working"); btn.textContent = "Checking the code";
+    apiPost({ action: "setTeamCode", teamCode: code }, "Checking the team code").then(function (r) {
+      code = "";
+      if (r.data) setData(r.data);
+      refresh(); var h = document.getElementById("team-h"); if (h) h.focus();
+      toast(teamName() + " connected. " + plural((r.result || {}).items || 0, "assignment") + " of yours came in.");
+    }).catch(function (e) {
+      code = ""; btn.disabled = false; btn.classList.remove("is-working"); btn.textContent = label;
+      var err = document.createElement("p"); err.className = "error"; err.setAttribute("role", "alert"); err.textContent = e.message || "The code wasn't saved.";
+      form.appendChild(err); input.focus();
+    });
+  }
+  function saveCalendars(btn) {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.cal-list input[name="cal"]'));
+    var exclude = boxes.filter(function (b) { return !b.checked; }).map(function (b) { return b.value; });
+    btn.disabled = true;
+    apiPost({ action: "saveCalendars", exclude: exclude }, "Saving").then(function (r) {
+      if (r.calendar) state.data.calendar = r.calendar;
+      btn.disabled = false; toast("Calendar choices saved");
+    }).catch(function (e) { btn.disabled = false; toast("Not saved: " + e.message); });
+  }
+
   function saveToken(form) {
     var input = form.querySelector("#token-input"), btn = form.querySelector('[type="submit"]'), token = input.value.replace(/\s+/g, "");
     input.value = "";   // never left sitting in the page
@@ -546,7 +708,7 @@
     var h = location.hash.replace(/^#\/?/, "").split("/");
     var view = h[0] || "home";
     document.querySelectorAll("[data-nav]").forEach(function (a) {
-      var on = a.getAttribute("data-nav") === (view === "c" || view === "i" ? "home" : view);
+      var on = a.getAttribute("data-nav") === (view === "c" || view === "i" || view === "d" ? "home" : view);
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     if (!state.data) return;
@@ -554,9 +716,11 @@
     if (view === "c") { var c = course(h[1]); html = viewCourse(h[1]); if (c) title = c.shortName; }
     else if (view === "i") { var it = byId(state.data.items, h[1]); html = viewItem(h[1]); if (it) title = it.title; }
     else if (view === "all") { html = viewAll(); title = "All work"; }
+    else if (view === "d") { html = viewDay(h[1]); var dd = dayFromIso(h[1]); if (!isNaN(dd)) title = fmtLongDay(noonOf(dd)); }
     else if (view === "news") { html = viewNews(); title = "Announcements"; }
     else if (view === "about") { html = viewAbout(); title = "About and settings"; }
     else { html = viewHome(); }
+    hidePeek(true);
     main.innerHTML = html;
     document.title = title + (title === "Classes Hub" ? "" : " | Classes Hub");
     var h1 = main.querySelector("h1");
@@ -683,6 +847,7 @@
       store.set("f.show", document.getElementById("f-show").value);
       refresh(); var again = document.getElementById(t.id); if (again) again.focus();
     }
+    if (t.id === "show-events") { store.set("showEvents", t.checked ? "1" : "0"); refresh(); var se = document.getElementById("show-events"); if (se) se.focus(); }
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
   });
   document.addEventListener("click", function (ev) {
@@ -701,6 +866,24 @@
       }).catch(function (e) { toast("Couldn't check bCourses: " + e.message); refresh(); });
     }
     if (act === "clear-token") confirmClearToken();
+    if (act === "clear-team") {
+      openDialog('<form method="dialog">' + dlgHead("Disconnect the " + teamName() + " Hub?") + '<div class="dlg__body"><p>Your team assignments leave this hub. Nothing changes in the team hub itself.</p></div>' +
+        '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it connected</button><button type="submit" class="btn btn--solid">Disconnect</button></div></form>', function () {
+        return apiPost({ action: "clearTeamCode" }).then(function () {
+          state.data.items = state.data.items.filter(function (x) { return x.kind !== "team"; });
+          if (state.data.settings.teamHub) state.data.settings.teamHub.connected = false;
+          refresh(); toast("Disconnected");
+        });
+      });
+    }
+    if (act === "save-calendars") saveCalendars(b);
+    if (act === "cal-prev" || act === "cal-next" || act === "cal-today") {
+      var p0 = parts(new Date()), cur = calMonth || { y: +p0.year, m: +p0.month };
+      if (act === "cal-today") calMonth = null;
+      else { var m2 = cur.m + (act === "cal-next" ? 1 : -1), y2 = cur.y; if (m2 < 1) { m2 = 12; y2--; } if (m2 > 12) { m2 = 1; y2++; } calMonth = (y2 === +p0.year && m2 === +p0.month) ? null : { y: y2, m: m2 }; }
+      var box = document.getElementById("month");
+      if (box) { box.outerHTML = monthHtml(); var again = document.querySelector('#month [data-act="' + (act === "cal-today" ? "cal-next" : act) + '"]'); if (again) again.focus(); }
+    }
     if (act === "send-digest") {
       b.disabled = true;
       apiPost({ action: "sendDigest" }, "Sending").then(function (r) { toast(r.sent ? "Sent. Check your inbox." : "Nothing to send right now."); })
@@ -710,12 +893,92 @@
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "all-filter" || ev.target.id === "news-filter") { ev.preventDefault(); return; }
     if (ev.target.id === "token-form") { ev.preventDefault(); saveToken(ev.target); return; }
+    if (ev.target.id === "team-form") { ev.preventDefault(); saveTeamCode(ev.target); return; }
     if (ev.target.id !== "gate") return;
     ev.preventDefault();
     store.set("code", document.getElementById("code").value.trim());
     start();
   });
   window.addEventListener("hashchange", route);
+
+  /* ---------- previews: hover a row (or focus it with the keyboard) to see what it's about ----------
+     Same behavior as the explainer boxes on gregor-posadas.github.io: a short delay, a boxed card that fades in,
+     placed below (or above, if there's no room) and never clipped. Escape closes it. Touch screens skip it: tapping opens the page. */
+  var peekEl = document.getElementById("peek"), peekOn = null, peekTimer = null;
+  var canHover = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  function peekContent(key) {
+    var kind = key.slice(0, 1), id = key.slice(2);
+    if (kind === "i") {
+      var it = byId(state.data.items, id); if (!it) return "";
+      var c = course(it.courseId), d = due(it), desc = plainPreview(it.description, 340);
+      var src = it.kind === "team" ? "From the " + teamName() + " Hub" + (it.project ? ", " + it.project : "") : it.kind === "mine" ? "Your to-do" : "From bCourses";
+      return '<p class="peek__meta">' + chip(c) + badge(it) + "</p><p class=\"peek__title\">" + esc(it.title) + "</p>" +
+        '<p class="peek__when">' + (d ? esc(fmtDay(d)) + ", " + esc(fmtTime(d)) + ". " + esc(relDue(d, isDone(it))) : "No due date") + (pts(it) ? ". " + esc(pts(it)) : "") + "</p>" +
+        (desc ? '<p class="peek__body">' + esc(desc) + "</p>" : '<p class="peek__body peek__body--none">' + (it.kind === "canvas" ? "No instructions on bCourses." : "No notes.") + "</p>") +
+        '<p class="peek__foot">' + esc(src) + ". Open it for everything.</p>";
+    }
+    if (kind === "n") {
+      var n = byId(state.data.announcements, id); if (!n) return "";
+      var at = n.postedAt ? new Date(n.postedAt) : null;
+      return '<p class="peek__meta">' + chip(course(n.courseId)) + "<span>" + (at ? esc(dayName(at)) + ", " + esc(fmtTime(at)) : "") + "</span></p><p class=\"peek__title\">" + esc(n.title) + "</p>" +
+        '<p class="peek__body">' + esc(plainPreview(n.message, 420)) + "</p>" + '<p class="peek__foot">' + (n.author ? esc(n.author) + ". " : "") + "Opens on bCourses.</p>";
+    }
+    if (kind === "e") {
+      var e = byId(gcal().events, id); if (!e) return "";
+      return '<p class="peek__meta"><span>' + esc(e.calendar) + "</span>" + (e.tentative ? "<span>Maybe</span>" : "") + "</p><p class=\"peek__title\">" + esc(e.title) + "</p>" +
+        '<p class="peek__when">' + esc(fmtDay(evStart(e))) + ", " + esc(evWhen(e)) + "</p>" + (e.location ? '<p class="peek__body">' + esc(e.location) + "</p>" : "") +
+        '<p class="peek__foot">' + (e.meetLink ? "Has a meeting link. " : "") + "Opens in Google Calendar.</p>";
+    }
+    return "";
+  }
+  function placePeek(anchor) {
+    var r = anchor.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    peekEl.style.left = "0px"; peekEl.style.top = "0px";
+    var w = peekEl.offsetWidth, h = peekEl.offsetHeight;
+    var left = Math.min(Math.max(12, r.left + 12), vw - 12 - w), top = r.bottom + 6;
+    if (top + h > vh - 12 && r.top - 6 - h >= 12) top = r.top - 6 - h;
+    peekEl.style.left = Math.max(12, left) + "px"; peekEl.style.top = Math.max(12, top) + "px";
+  }
+  function showPeek(anchor) {
+    var html = peekContent(anchor.getAttribute("data-peek"));
+    if (!html) return;
+    if (peekOn && peekOn !== anchor) unlinkPeek(peekOn);
+    peekEl.innerHTML = html; peekOn = anchor;
+    var target = anchor.querySelector("a") || anchor; target.setAttribute("aria-describedby", "peek");
+    placePeek(anchor);
+    peekEl.setAttribute("aria-hidden", "false"); peekEl.classList.add("is-on");
+  }
+  function unlinkPeek(a) { var t = a.querySelector("a") || a; if (t.getAttribute("aria-describedby") === "peek") t.removeAttribute("aria-describedby"); }
+  function hidePeek(now) {
+    clearTimeout(peekTimer);
+    if (peekOn) unlinkPeek(peekOn);
+    peekOn = null; peekEl.classList.remove("is-on"); peekEl.setAttribute("aria-hidden", "true");
+    if (now) peekEl.innerHTML = "";
+  }
+  if (canHover) {
+    document.addEventListener("mouseover", function (ev) {
+      var a = ev.target.closest && ev.target.closest("[data-peek]");
+      if (!a || a === peekOn) { clearTimeout(peekTimer); if (!a && peekOn) peekTimer = setTimeout(function () { hidePeek(); }, 120); return; }
+      clearTimeout(peekTimer); peekTimer = setTimeout(function () { showPeek(a); }, peekOn ? 60 : 220);
+    });
+    document.addEventListener("mouseleave", function () { hidePeek(); });
+  }
+  document.addEventListener("focusin", function (ev) {
+    var a = ev.target.closest && ev.target.closest("[data-peek]");
+    if (a && ev.target.matches && ev.target.matches(":focus-visible")) { clearTimeout(peekTimer); showPeek(a); }
+    else if (peekOn && (!a || a !== peekOn)) hidePeek();
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && peekOn) hidePeek(); });
+  window.addEventListener("scroll", function () { if (peekOn) hidePeek(); }, { passive: true });
+  document.addEventListener("click", function () { if (peekOn) hidePeek(true); });
+
+  /* The clock on This week: the time ticks over each minute; a new day re-draws the page. */
+  var shownDay = dayNumber(new Date());
+  setInterval(function () {
+    var now = new Date();
+    if (dayNumber(now) !== shownDay) { shownDay = dayNumber(now); if (state.data && !document.querySelector("dialog[open]")) refresh(); return; }
+    document.querySelectorAll('[data-clock="time"]').forEach(function (el) { el.textContent = clockText(); });
+  }, 15000);
 
   /* ---------- light and dark mode ---------- */
   function effectiveTheme() {
@@ -739,7 +1002,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005061958";
+  var BUILD = "20261005065155";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

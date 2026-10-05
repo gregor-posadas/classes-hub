@@ -6,6 +6,8 @@ All of Gregor's classes for the semester in one place, read from bCourses: what'
 - **Data:** the Google Sheet "Classes Hub data" in your Drive. Nothing about your courses is stored in this repository.
 - **Backend:** a Google Apps Script web app attached to that Sheet. Every 2 hours it reads your courses, assignments (with your submission status) and announcements from bCourses through the Canvas API, keeps them in the Sheet, puts every due date on a "Fall 2026 classes" Google Calendar, and emails you at 8 AM on days with something to say.
 - **Read only:** the hub never submits, posts or changes anything on bCourses.
+- **Google Calendar, both ways:** events from the calendars you pick show on This week, the month calendar and each day's page (read only), and every due date goes onto a "<term> classes" calendar.
+- **Microbe Busters Hub:** with the team code added, your assignments there show up under DevEng C200, and marking one done here marks it done there too.
 - **Font:** Atkinson Hyperlegible Next, under the SIL Open Font License (`fonts/OFL.txt`).
 
 Until the backend is connected, the site runs on sample courses from `data/demo.json`, with the dates moved to the current week so it always looks like a real week.
@@ -14,7 +16,8 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 
 | Page | What it's for |
 | --- | --- |
-| **This week** | Semester clock and how much of the work due so far is done, anything overdue, the next 7 days grouped by day, a card for each course, and this week's announcements. |
+| **This week** | Semester clock and how much of the work due so far is done, anything overdue, and the next 7 days grouped by day with your calendar events. A side column has a clock, a month calendar (dots for what's due, in course colors, and a dash for events), what's next on your calendar, and this week's announcements. A card for each course sits below. Point at any assignment, event or announcement for a preview. |
+| **Day page** | Everything due on one day plus that day's events. Open it from the month calendar or a day heading. |
 | **Course page** | Everything for one course by due date, its announcements, an **Open on bCourses** button, and a button to a team hub if it has one (DevEng C200 links to the Microbe Busters Hub). **Course settings** lets you rename or hide a course. |
 | **Assignment page** | Due date, what bCourses says (submitted, missing, graded), the instructions from bCourses, **Open on bCourses**, **Add to Google Calendar**, and your own progress (To do, In progress, Done). |
 | **All work** | Every assignment and to-do by week, filtered by course and by still to do, done or everything. |
@@ -48,6 +51,14 @@ When you change `Code.gs` later, use **Deploy > Manage deployments > Edit > New 
 
 Some university Google accounts only allow web apps for people signed in to that university, and the GitHub Pages site can't use such a backend. Use a personal Google account for the Sheet and the script instead (the hub only needs your bCourses token, not your Berkeley Google account). If you want it under your Berkeley account anyway, ask for the small change that serves the site from Apps Script itself.
 
+## Updating the backend after a change to `Code.gs`
+
+1. In the Apps Script editor, replace `Code.gs` with the new one from this repo, and `appsscript.json` too.
+2. If Google asks, approve the new permissions (Run `setup` once to trigger the prompt; it changes nothing that's already set up).
+3. **Deploy > Manage deployments**, pencil icon, Version: **New version**, **Deploy**. The `/exec` URL stays the same.
+
+The Google Calendar events need the Google Calendar API service, which the new `appsscript.json` turns on. If the site says to turn it on, open **Services** (the + next to it) in the editor, add **Google Calendar API**, and deploy a new version.
+
 ## Settings you can change without editing code
 
 All in **Project Settings > Script properties**:
@@ -61,6 +72,9 @@ All in **Project Settings > Script properties**:
 | `TERM` | Which bCourses term counts as this semester. | `Fall 2026` |
 | `EMAIL_PREF` | `daily`, `weekly` (Mondays) or `off`. Also set on the About page. | `daily` |
 | `CALENDAR_SYNC` | `off` keeps due dates off Google Calendar. Run `clearCalendar` once to remove the ones already there. | `on` |
+| `TEAM_HUB_CODE` | The Microbe Busters team code. Set from the site under About and settings. | |
+| `TEAM_HUB_MEMBER` | Your id in the team hub. | `gregor` |
+| `CAL_EXCLUDE` | Google calendars left out of the hub. Set from the site under About and settings. | the team hub's deadlines calendar |
 | `LINKED_HUBS` | JSON list of `{match, url, label}`: courses whose code matches get a button to that hub. | DevEng C200 → Microbe Busters, DevEng 203 → Lagmay Visit |
 
 ## A new semester

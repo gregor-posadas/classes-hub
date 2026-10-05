@@ -16,6 +16,17 @@
     "https://www.googleapis.com/auth/userinfo.email"
   ],
   "urlFetchWhitelist": [
-    "https://bcourses.berkeley.edu/"
-  ]
+    "https://bcourses.berkeley.edu/",
+    "https://script.google.com/",
+    "https://script.googleusercontent.com/"
+  ],
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Calendar",
+        "serviceId": "calendar",
+        "version": "v3"
+      }
+    ]
+  }
 }

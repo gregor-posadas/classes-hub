@@ -149,4 +149,48 @@ t('cleanToken accepts a pasted token and rejects junk', () => {
   assert.strictEqual(ctx.cleanToken('<script>alert(1)</script>xxxxxxxxxxxx'), '');
 });
 
+t('normalizeTeamItems files your Microbe Busters work under DevEng C200 and links back', () => {
+  const data = { members: [{ id: 'gregor' }, { id: 'muthoni' }], projects: [{ id: 'discovery', name: 'User discovery' }],
+    assignments: [
+      { id: 'a-1', memberId: 'gregor', projectId: 'discovery', title: 'Draft survey questions', due: '2026-10-06T17:00:00-07:00', status: 'doing', link: 'https://docs.google.com/document/d/x', instructions: '- Five questions' },
+      { id: 'a-2', memberId: 'muthoni', title: 'Not mine', status: 'todo' },
+      { id: 'a-3', memberId: 'gregor', title: 'Odd status', status: 'weird', link: 'javascript:alert(1)' }] };
+  const courses = [{ id: 'c-101', code: 'DEVENG C200 - LEC 001', name: 'Design', shortName: 'DEVENG C200' }, { id: 'c-102', code: 'CIVENG 210', name: 'Env', shortName: 'CIVENG 210' }];
+  const r = ctx.normalizeTeamItems(data, courses, 'gregor', 'https://gregor-posadas.github.io/microbe-busters-hub/', ctx.DEFAULTS.TEAM_HUB_COURSE);
+  assert.strictEqual(r.length, 2);
+  assert.strictEqual(r[0].id, 't-a-1');
+  assert.strictEqual(r[0].courseId, 'c-101');
+  assert.strictEqual(r[0].kind, 'team');
+  assert.strictEqual(r[0].myStatus, 'doing');
+  assert.strictEqual(r[0].project, 'User discovery');
+  assert.strictEqual(r[0].url, 'https://gregor-posadas.github.io/microbe-busters-hub/#/a/a-1');
+  assert.strictEqual(r[1].myStatus, 'todo');
+  assert.strictEqual(r[1].link, '');
+});
+
+t('mergeTeamItems swaps in fresh team items and leaves everything else', () => {
+  const items = [{ id: 'a-5', kind: 'canvas', title: 'PS' }, { id: 't-a-9', kind: 'team', title: 'Old', firstSeenAt: 'x' }, { id: 't-a-1', kind: 'team', title: 'Old title', firstSeenAt: 'first' }];
+  const out = ctx.mergeTeamItems(items, [{ id: 't-a-1', kind: 'team', title: 'New title' }], 'now');
+  const by = Object.fromEntries(out.map((x) => [x.id, x]));
+  assert.strictEqual(by['a-5'].title, 'PS');
+  assert.strictEqual(by['t-a-1'].title, 'New title');
+  assert.strictEqual(by['t-a-1'].firstSeenAt, 'first');
+  assert.strictEqual(by['t-a-9'].removed, 'yes');
+  assert.strictEqual(ctx.mergeTeamItems(items, null, 'now'), items);
+});
+
+t('normalizeEvent keeps times and meeting links, drops declined and cancelled events', () => {
+  const ev = ctx.normalizeEvent({ id: 'abc', summary: 'Advisor meeting', start: { dateTime: '2026-10-06T10:00:00-07:00' }, end: { dateTime: '2026-10-06T10:30:00-07:00' },
+    hangoutLink: 'https://meet.google.com/xyz', location: '410 Davis', htmlLink: 'https://calendar.google.com/e', description: 'private notes' }, 'Gregor');
+  assert.strictEqual(ev.title, 'Advisor meeting');
+  assert.strictEqual(ev.allDay, false);
+  assert.strictEqual(ev.meetLink, 'https://meet.google.com/xyz');
+  assert.strictEqual(ev.description, undefined);
+  const allDay = ctx.normalizeEvent({ id: 'd', summary: 'Holiday', start: { date: '2026-10-12' }, end: { date: '2026-10-13' } }, 'Holidays');
+  assert.strictEqual(allDay.allDay, true);
+  assert.strictEqual(allDay.start, '2026-10-12');
+  assert.strictEqual(ctx.normalizeEvent({ id: 'x', status: 'cancelled', start: { date: '2026-10-12' } }, 'c'), null);
+  assert.strictEqual(ctx.normalizeEvent({ id: 'y', start: { dateTime: '2026-10-06T10:00:00-07:00' }, attendees: [{ self: true, responseStatus: 'declined' }] }, 'c'), null);
+});
+
 console.log(n + ' checks passed');

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Classes Hub">
+  <rect width="32" height="32" rx="7" fill="#003262"/>
+  <g fill="#FDB515">
+    <path d="M16 3.6 19.3 10.2H12.7Z"/>
+    <rect x="12.4" y="10.2" width="7.2" height="1.5"/>
+    <rect x="12.9" y="11.7" width="6.2" height="5.6"/>
+    <rect x="12.4" y="17.3" width="7.2" height="1.3"/>
+    <rect x="13.7" y="18.6" width="4.6" height="8.9"/>
+    <rect x="10.6" y="27.5" width="10.8" height="1.7" rx="0.4"/>
+  </g>
+  <g fill="#003262">
+    <rect x="14.1" y="12.7" width="1.4" height="3.6" rx="0.7"/>
+    <rect x="16.5" y="12.7" width="1.4" height="3.6" rx="0.7"/>
+    <circle cx="16" cy="20.9" r="1.35"/>
+  </g>
+</svg>

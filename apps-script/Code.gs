@@ -11,6 +11,8 @@
  *  - Keeps your own progress (To do, In progress, Done) and your own to-dos next to them.
  *  - Puts every due date on a "<TERM> classes" Google Calendar, without inviting anyone.
  *  - Emails you at 8 AM, only on days with something to say.
+ *  - Shows the events on your Google calendars next to your work (read only).
+ *  - Brings in your assignments from the Microbe Busters Hub, and sends status changes back to it.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
  * The hub only reads from bCourses; it never submits, posts or changes anything there.
@@ -22,7 +24,7 @@ var TABS = {
   Courses: ['id', 'canvasId', 'code', 'name', 'shortName', 'color', 'textColor', 'url', 'hidden', 'hubUrl', 'hubLabel', 'score', 'grade', 'term', 'syncedAt', 'syncError'],
   Items: ['id', 'canvasId', 'courseId', 'kind', 'title', 'due', 'unlockAt', 'points', 'url', 'description', 'submissionTypes',
     'submitted', 'submittedAt', 'late', 'missing', 'score', 'grade', 'myStatus', 'updatedAt', 'calendarEventId', 'calendarSig',
-    'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link'],
+    'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project'],
   Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message'],
   Log: ['timestamp', 'action', 'detail']
 };
@@ -38,6 +40,14 @@ var DEFAULTS = {
   CALENDAR_SYNC: 'on',             // 'off' keeps due dates off Google Calendar
   EMAIL_PREF: 'daily',             // 'daily', 'weekly' (Mondays) or 'off'
   ANNOUNCEMENT_DAYS: '30',
+  CAL_EXCLUDE: '',                 // JSON list of Google calendar ids to leave out (set from the site)
+  // The Microbe Busters Hub: your assignments there show up under DevEng C200. The team code is set from the site.
+  TEAM_HUB_NAME: 'Microbe Busters Hub',
+  TEAM_HUB_API: 'https://script.google.com/macros/s/AKfycbzXAHfjeTcBP3YtO5yUFegoFo8hpV0VAVa2iY0EwcWr3ysHVc9tm7J2raYF4Jk8XXlo/exec',
+  TEAM_HUB_URL: 'https://gregor-posadas.github.io/microbe-busters-hub/',
+  TEAM_HUB_MEMBER: 'gregor',
+  TEAM_HUB_COURSE: 'DEV\\s*ENG\\s*C?200',
+  TEAM_HUB_CALENDAR: 'Microbe Busters deadlines',   // its deadlines are already items here, so this calendar starts switched off
   // Courses that have their own team hub get a button to it. Matched against the course code.
   LINKED_HUBS: JSON.stringify([
     { match: 'DEV\\s*ENG\\s*C?200', url: 'https://gregor-posadas.github.io/microbe-busters-hub/', label: 'Open the Microbe Busters Hub' },
@@ -108,6 +118,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'data') {
       checkCode(p.code);
+      refreshTeamHubIfStale();
       return json({ ok: true, data: payload() });
     }
     return json({ ok: true, service: APP_NAME });
@@ -139,6 +150,11 @@ function doPost(e) {
         var first = syncCanvas();
         return json({ ok: true, name: who, result: first, data: payload() });
       case 'clearToken': return json(clearToken());
+      case 'setTeamCode':
+        var team = setTeamCode(b.teamCode);   // checked with the team hub before it's saved
+        return json({ ok: true, result: team, data: payload() });
+      case 'clearTeamCode': return json(clearTeamCode());
+      case 'saveCalendars': return json(saveCalendars(b.exclude || []));
       default: throw new Error('Unknown action.');
     }
   } catch (err) {
@@ -177,8 +193,10 @@ function cell(v) {
 function readTable(name) {
   var sh = sheet(name);
   if (!sh || sh.getLastRow() < 2) return [];
+  ensureTab(sh, name);
   var values = sh.getRange(1, 1, sh.getLastRow(), TABS[name].length).getValues();
-  var head = values.shift();
+  values.shift();
+  var head = TABS[name];   // columns are always written in this order
   return values.filter(function (r) { return String(r[0]).trim() !== ''; }).map(function (r) {
     var o = {};
     head.forEach(function (h, i) { o[h] = cell(r[i]); });
@@ -186,9 +204,18 @@ function readTable(name) {
   });
 }
 
+/** Adds any column a newer version of the hub needs, and keeps the header row current. */
+function ensureTab(sh, name) {
+  var head = TABS[name];
+  if (sh.getMaxColumns() < head.length) sh.insertColumnsAfter(sh.getMaxColumns(), head.length - sh.getMaxColumns());
+  var cur = sh.getRange(1, 1, 1, head.length).getValues()[0].map(String);
+  if (cur.join('|') !== head.join('|')) sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+}
+
 /** Rewrites a whole tab in one go (used by the bCourses sync). */
 function writeTable(name, rows) {
   var sh = sheet(name), head = TABS[name];
+  ensureTab(sh, name);
   var values = rows.map(function (o) { return head.map(function (h) { return o[h] === undefined || o[h] === null ? '' : String(o[h]); }); });
   var last = sh.getLastRow();
   if (last > 1) sh.getRange(2, 1, last - 1, head.length).clearContent();
@@ -197,6 +224,7 @@ function writeTable(name, rows) {
 
 function writeRow(name, obj) {
   var sh = sheet(name), head = TABS[name];
+  ensureTab(sh, name);
   var row = head.map(function (h) { return obj[h] === undefined || obj[h] === null ? '' : String(obj[h]); });
   var ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]); }) : [];
   var i = ids.indexOf(String(obj[head[0]]));
@@ -227,6 +255,7 @@ function payload() {
       delete x.calendarEventId; delete x.calendarSig; return x;
     }),
     announcements: readTable('Announcements'),
+    calendar: googleCalendar(),
     settings: {
       emailPref: setting('EMAIL_PREF'),
       calendar: setting('CALENDAR_SYNC') !== 'off',
@@ -235,7 +264,12 @@ function payload() {
       lastSyncOk: props.getProperty('LAST_SYNC_OK') || '',
       syncError: props.getProperty('SYNC_ERROR') || '',
       hasToken: !!props.getProperty('CANVAS_TOKEN'),
-      tokenSetAt: props.getProperty('TOKEN_SET_AT') || ''
+      tokenSetAt: props.getProperty('TOKEN_SET_AT') || '',
+      teamHub: {
+        name: setting('TEAM_HUB_NAME'), url: setting('TEAM_HUB_URL'),
+        connected: !!props.getProperty('TEAM_HUB_CODE'),
+        lastSync: props.getProperty('TEAM_LAST_SYNC') || '', error: props.getProperty('TEAM_SYNC_ERROR') || ''
+      }
     },
     generated: cell(new Date())
   };
@@ -488,6 +522,7 @@ function syncCanvas() {
       announcements.sort(function (a, b) { return a.postedAt < b.postedAt ? 1 : -1; });
     }
 
+    try { items = mergeTeamItems(items, fetchTeamItems(courses), nowIso); } catch (e) { props.setProperty('TEAM_SYNC_ERROR', e.message); }
     syncItemCalendar(items, courses);
     writeTable('Courses', courses);
     writeTable('Items', items);
@@ -518,6 +553,7 @@ function setStatus(id, status) {
   if (STATUSES.indexOf(status) < 0) throw new Error('Unknown status.');
   var items = readTable('Items'), it = indexBy(items)[id];
   if (!it) throw new Error('That item is no longer on bCourses. Reload the page.');
+  if (it.kind === 'team') teamHubPost({ action: 'setStatus', id: it.canvasId, status: status });   // throws if the team hub said no
   it.myStatus = status;
   it.updatedAt = cell(new Date());
   syncItemCalendar([it], readTable('Courses'));
@@ -636,7 +672,7 @@ function syncItemCalendar(items, courses) {
   var byCourse = indexBy(courses), appUrl = setting('APP_URL'), made = 0;
   items.forEach(function (it) {
     var course = byCourse[it.courseId] || {};
-    var gone = it.removed === 'yes' || !it.due || course.hidden === 'yes';
+    var gone = it.removed === 'yes' || !it.due || course.hidden === 'yes' || it.kind === 'team';
     if (gone) { if (it.calendarEventId) { removeEvent(it.calendarEventId); it.calendarEventId = ''; it.calendarSig = ''; } return; }
     var title = (isDone(it) ? 'Done' : 'Due') + (course.shortName ? ' (' + course.shortName + ')' : '') + ': ' + it.title;
     var sig = title + '|' + it.due;
@@ -673,6 +709,183 @@ function clearCalendar() {
   writeTable('Items', items);
 }
 
+/* ------------------------------------------------------------------ the Microbe Busters Hub */
+
+/** GET the team hub's data with the saved team code. */
+function teamHubData(code) {
+  code = code || PropertiesService.getScriptProperties().getProperty('TEAM_HUB_CODE');
+  if (!code) return null;
+  var url = setting('TEAM_HUB_API') + '?action=data&code=' + encodeURIComponent(code);
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  if (res.getResponseCode() !== 200) throw new Error('The ' + setting('TEAM_HUB_NAME') + ' answered ' + res.getResponseCode() + '.');
+  var j = JSON.parse(res.getContentText() || '{}');
+  if (!j.ok) { var e = new Error(j.code === 'team' ? 'The ' + setting('TEAM_HUB_NAME') + ' did not accept the team code.' : (j.error || 'The team hub said no.')); e.kind = j.code; throw e; }
+  return j.data;
+}
+
+/** POST a change to the team hub as you (for example marking an assignment done there). */
+function teamHubPost(body) {
+  var code = PropertiesService.getScriptProperties().getProperty('TEAM_HUB_CODE');
+  if (!code) throw new Error('The ' + setting('TEAM_HUB_NAME') + ' isn\'t connected. Add the team code under About and settings.');
+  body.code = code; body.who = setting('TEAM_HUB_MEMBER');
+  var res = UrlFetchApp.fetch(setting('TEAM_HUB_API'), { method: 'post', contentType: 'text/plain;charset=utf-8', payload: JSON.stringify(body), muteHttpExceptions: true, followRedirects: true });
+  var j = {};
+  try { j = JSON.parse(res.getContentText() || '{}'); } catch (e) { j = {}; }
+  if (!j.ok) throw new Error('The ' + setting('TEAM_HUB_NAME') + ' didn\'t save that: ' + (j.error || 'no answer') + '.');
+  return j;
+}
+
+/** Your assignments from the team hub, flattened like bCourses items and filed under the matching course. */
+function fetchTeamItems(courses) {
+  var data = teamHubData();
+  if (!data) return null;   // not connected: leave team items alone
+  return normalizeTeamItems(data, courses, setting('TEAM_HUB_MEMBER'), setting('TEAM_HUB_URL'), setting('TEAM_HUB_COURSE'));
+}
+
+function normalizeTeamItems(data, courses, member, hubUrl, courseMatch) {
+  var re = new RegExp(courseMatch, 'i');
+  var course = (courses || []).filter(function (c) { return re.test((c.code || '') + ' ' + (c.name || '') + ' ' + (c.shortName || '')); })[0];
+  var projects = {}; (data.projects || []).forEach(function (p) { projects[p.id] = p.name; });
+  var base = String(hubUrl || '').replace(/#.*$/, '');
+  return (data.assignments || []).filter(function (a) { return a.memberId === member; }).map(function (a) {
+    return {
+      id: 't-' + a.id, canvasId: String(a.id), courseId: course ? course.id : '', kind: 'team',
+      title: String(a.title || 'Team assignment'), due: a.due || '', unlockAt: '', points: '',
+      url: base ? base + '#/a/' + a.id : '', link: /^https?:\/\//i.test(a.link || '') ? a.link : '',
+      description: String(a.instructions || '').slice(0, 30000), submissionTypes: '', submitted: '', submittedAt: '',
+      late: '', missing: '', score: '', grade: '', myStatus: ['todo', 'doing', 'done'].indexOf(a.status) > -1 ? a.status : 'todo',
+      updatedAt: a.updatedAt || '', canvasUpdatedAt: a.updatedAt || '', project: projects[a.projectId] || ''
+    };
+  });
+}
+
+/** Replaces the team items with a fresh copy. null means the team hub isn't connected, so nothing changes. */
+function mergeTeamItems(items, fetched, nowIso) {
+  if (!fetched) return items;
+  var prev = indexBy(items.filter(function (x) { return x.kind === 'team'; })), seen = {};
+  var out = items.filter(function (x) { return x.kind !== 'team'; });
+  fetched.forEach(function (f) {
+    var old = prev[f.id];
+    var row = Object.assign({}, old || { calendarEventId: '', calendarSig: '' }, f);
+    row.firstSeenAt = old && old.firstSeenAt ? old.firstSeenAt : nowIso;
+    row.removed = ''; seen[f.id] = true; out.push(row);
+  });
+  Object.keys(prev).forEach(function (id) { if (!seen[id]) { var r = Object.assign({}, prev[id]); r.removed = 'yes'; out.push(r); } });
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('TEAM_LAST_SYNC', nowIso); props.setProperty('TEAM_SYNC_ERROR', '');
+  return out;
+}
+
+/** Keeps the team items fresh when you open the site: re-reads the team hub if it's been 10 minutes. */
+function refreshTeamHubIfStale() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('TEAM_HUB_CODE')) return;
+  var last = props.getProperty('TEAM_LAST_SYNC');
+  if (last && Date.now() - new Date(last).getTime() < 10 * 60000) return;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) return;
+  try {
+    var items = mergeTeamItems(readTable('Items'), fetchTeamItems(readTable('Courses')), cell(new Date()));
+    writeTable('Items', items);
+  } catch (e) {
+    props.setProperty('TEAM_SYNC_ERROR', e.message);
+    props.setProperty('TEAM_LAST_SYNC', cell(new Date()));   // don't retry on every page load
+  } finally { lock.releaseLock(); }
+}
+
+/** Saves the team code from the site after checking it with the team hub. Like the token, it's never sent back. */
+function setTeamCode(raw) {
+  var code = String(raw || '').trim();
+  if (!code || code.length > 100) throw new Error('Paste the team code from the ' + setting('TEAM_HUB_NAME') + '.');
+  var data;
+  try { data = teamHubData(code); }
+  catch (e) { throw new Error(e.kind === 'team' ? 'The ' + setting('TEAM_HUB_NAME') + ' didn\'t accept that code.' : e.message); }
+  var member = setting('TEAM_HUB_MEMBER');
+  if (!(data.members || []).some(function (m) { return m.id === member; })) throw new Error('That team hub has no member "' + member + '". Set TEAM_HUB_MEMBER in Script properties.');
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('TEAM_HUB_CODE', code);
+  var courses = readTable('Courses');
+  var items = mergeTeamItems(readTable('Items'), normalizeTeamItems(data, courses, member, setting('TEAM_HUB_URL'), setting('TEAM_HUB_COURSE')), cell(new Date()));
+  writeTable('Items', items);
+  log('team hub', 'connected');
+  return { items: items.filter(function (x) { return x.kind === 'team' && x.removed !== 'yes'; }).length };
+}
+
+function clearTeamCode() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('TEAM_HUB_CODE');
+  writeTable('Items', readTable('Items').filter(function (x) { return x.kind !== 'team'; }));
+  log('team hub', 'disconnected');
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ your Google calendars (read only) */
+
+/**
+ * Events from the calendars you see in Google Calendar, from a week before this month to six weeks ahead.
+ * Leaves out the hub's own deadlines calendar (those are already items here) and any you switch off on the site.
+ * Cached for 5 minutes. Only titles, times, places and meeting links come through, never descriptions or guests.
+ */
+function googleCalendar() {
+  var cache = CacheService.getScriptCache(), hit = cache.get('gcal');
+  if (hit) { try { return JSON.parse(hit); } catch (e) { /* re-read */ } }
+  var props = PropertiesService.getScriptProperties(), own = props.getProperty('CALENDAR_ID') || '';
+  var exclude = [];
+  try { exclude = JSON.parse(setting('CAL_EXCLUDE') || '[]'); } catch (e) { exclude = []; }
+  var firstSeen = !setting('CAL_EXCLUDE');   // until you choose, the team hub's deadlines calendar starts off
+  var now = new Date(), parts = Utilities.formatDate(now, TZ, 'yyyy-MM').split('-');
+  var from = new Date(new Date(parts[0] + '-' + parts[1] + '-01T00:00:00Z').getTime() - 8 * 86400000);
+  var to = new Date(now.getTime() + 45 * 86400000);
+  var out = { calendars: [], events: [], error: '' };
+  try {
+    var list = (Calendar.CalendarList.list({ maxResults: 250 }).items || []).filter(function (c) { return c.id !== own && !c.deleted && c.selected !== false && !c.hidden; });
+    list.forEach(function (c) {
+      var name = c.summaryOverride || c.summary || c.id;
+      var off = exclude.indexOf(c.id) > -1 || (firstSeen && name === setting('TEAM_HUB_CALENDAR'));
+      out.calendars.push({ id: c.id, name: name, primary: !!c.primary, included: !off });
+      if (off) return;
+      var page = null, n = 0;
+      do {
+        var res = Calendar.Events.list(c.id, { timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: true, orderBy: 'startTime', maxResults: 250, pageToken: page || undefined });
+        (res.items || []).forEach(function (e) { var ev = normalizeEvent(e, name); if (ev) out.events.push(ev); });
+        page = res.nextPageToken; n++;
+      } while (page && n < 4);
+    });
+  } catch (err) {
+    out.error = /Calendar is not defined|ReferenceError/.test(String(err)) ? 'Turn on the Google Calendar service in Apps Script (Services, then Google Calendar API) to see your events.' : 'Couldn\'t read your Google calendars: ' + err.message;
+  }
+  out.events.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
+  out.calendars.sort(function (a, b) { return (b.primary - a.primary) || a.name.localeCompare(b.name); });
+  try { cache.put('gcal', JSON.stringify(out), 300); } catch (e) { /* too big to cache */ }
+  return out;
+}
+
+/** One Google Calendar event for the hub, or null for cancelled events and ones you declined. */
+function normalizeEvent(e, calendarName) {
+  if (!e || e.status === 'cancelled' || !e.start) return null;
+  var me = (e.attendees || []).filter(function (a) { return a.self; })[0];
+  if (me && me.responseStatus === 'declined') return null;
+  var link = e.hangoutLink || '';
+  if (!link && e.conferenceData && e.conferenceData.entryPoints) {
+    e.conferenceData.entryPoints.forEach(function (p) { if (p.entryPointType === 'video' && !link) link = p.uri; });
+  }
+  var allDay = !!e.start.date;
+  return {
+    id: 'g-' + String(e.id).slice(0, 60), calendar: calendarName, title: String(e.summary || '(No title)').slice(0, 300),
+    start: allDay ? e.start.date : e.start.dateTime, end: allDay ? (e.end && e.end.date) || e.start.date : (e.end && e.end.dateTime) || e.start.dateTime,
+    allDay: allDay, location: String(e.location || '').slice(0, 300), meetLink: /^https:\/\//.test(link) ? link : '',
+    url: e.htmlLink || '', tentative: !!(me && me.responseStatus === 'tentative')
+  };
+}
+
+function saveCalendars(exclude) {
+  var ids = (exclude || []).map(String).filter(function (x) { return x && x.length < 300; }).slice(0, 100);
+  PropertiesService.getScriptProperties().setProperty('CAL_EXCLUDE', JSON.stringify(ids));
+  CacheService.getScriptCache().remove('gcal');
+  log('calendars', ids.length + ' left out');
+  return { ok: true, calendar: googleCalendar() };
+}
+
 /* ------------------------------------------------------------------ the morning email */
 
 /*
@@ -707,7 +920,7 @@ function sendDailyDigest(force) {
   var shown = {}; overdue.concat(soon).forEach(function (it) { shown[it.id] = true; });
   var since = weekly ? new Date(now.getTime() - 7 * DAYMS) : lastRun;
   var fresh = items.filter(function (it) {
-    return it.kind === 'canvas' && !shown[it.id] && it.firstSeenAt && it.firstSeenAt !== firstSync && new Date(it.firstSeenAt) > since && !isDone(it);
+    return (it.kind === 'canvas' || it.kind === 'team') && !shown[it.id] && it.firstSeenAt && it.firstSeenAt !== firstSync && new Date(it.firstSeenAt) > since && !isDone(it);
   }).sort(byDue);
   var news = readTable('Announcements').filter(function (n) {
     var c = courses[n.courseId]; return n.postedAt && new Date(n.postedAt) > since && !(c && c.hidden === 'yes');
@@ -719,7 +932,8 @@ function sendDailyDigest(force) {
     var d = it.due ? new Date(it.due) : null;
     var when = d ? (d < now ? 'Was due ' : 'Due ') + relDay(d, now) + ' at ' + Utilities.formatDate(d, TZ, 'h:mm a') : 'No due date';
     if (it.missing === 'yes') when += ', bCourses marks it missing';
-    return emailItem(appUrl ? appUrl + '#/i/' + it.id : '', tag(it) + it.title, when, it.url || it.link, it.url ? 'Open on bCourses' : 'Open the link');
+    var linkLabel = it.kind === 'team' ? 'Open in the ' + setting('TEAM_HUB_NAME') : it.url ? 'Open on bCourses' : 'Open the link';
+    return emailItem(appUrl ? appUrl + '#/i/' + it.id : '', tag(it) + it.title, when, it.url || it.link, linkLabel);
   };
   var newsItem = function (n) {
     var c = courses[n.courseId];
