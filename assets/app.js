@@ -300,7 +300,7 @@
     var sem = semester(), now = new Date();
     var dueSoFar = items().filter(function (it) { var d = due(it); return d && d <= now && !(it.kind === "canvas" && noSubmit(it) && it.myStatus !== "done" && it.score === ""); });
     var turnedIn = dueSoFar.filter(isDone).length, wpct = dueSoFar.length ? Math.round(100 * turnedIn / dueSoFar.length) : 100;
-    return '<section class="semester" aria-labelledby="prog-h"><h2 id="prog-h" class="semester__h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid\">" +
+    return '<section class="semester rail__sec" aria-labelledby="prog-h"><h2 id="prog-h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid\">" +
       meter("prog-time", "of the semester has gone by", sem.pct, sem.before ? "Starts " + esc(fmtDay(sem.start)) : sem.after ? "The semester is over." : "Week " + sem.week + " of " + sem.weeks + ", " + plural(sem.left, "day") + " left. Ends " + esc(fmtDay(sem.end)) + ".", "meter--time") +
       meter("prog-work", "of the work due so far is done", wpct, turnedIn + " of " + dueSoFar.length + " done", "meter--work") + "</div></section>";
   }
@@ -349,7 +349,7 @@
       var dn = first + d, dueList = byDay[dn] || [], evs = eventsOn(dn), date = noonOf(dn);
       var label = fmtDay(date) + (dn === today ? ", today" : "") + ": " + (dueList.length ? plural(dueList.length, "thing") + " due" : "nothing due") + (evs.length ? ", " + plural(evs.length, "event") : "");
       var dots = dueList.slice(0, 3).map(function (it) { var c = course(it.courseId); return '<i class="mc__dot" style="--c:' + esc(c ? c.color : "var(--ink)") + '"></i>'; }).join("") + (dueList.length > 3 ? '<i class="mc__more">+</i>' : "");
-      cells.push('<a class="mc__day' + (dn === today ? " is-today" : "") + (dn < today ? " is-past" : "") + (dueList.length ? " has-due" : "") + '" href="#/d/' + isoDay(dn) + '" aria-label="' + esc(label) + '">' +
+      cells.push('<a class="mc__day' + (dn === today ? " is-today" : "") + (dn < today ? " is-past" : "") + (dueList.length ? " has-due" : "") + '" href="#/d/' + isoDay(dn) + '" aria-label="' + esc(label) + '" data-peek="d:' + isoDay(dn) + '">' +
         '<span class="mc__n" aria-hidden="true">' + (d + 1) + '</span><span class="mc__marks" aria-hidden="true">' + dots + (evs.length ? '<i class="mc__evt"></i>' : "") + "</span></a>");
     }
     var title = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(first * DAY + 12 * 3600000));
@@ -359,63 +359,106 @@
       '<p class="mc__key"><span><i class="mc__dot" style="--c:var(--ink)"></i> due, in its course color</span>' + (gcal().events.length ? '<span><i class="mc__evt"></i> on your calendar</span>' : "") + "</p>" +
       (calMonth ? '<button type="button" class="btn btn--quiet mc__today" data-act="cal-today">Back to this month</button>' : "") + "</div>";
   }
+  /* A split-flap clock, like the vintage ones: each card folds down to the next digit when the minute turns.
+     Screen readers get the time as text; the cards are decoration. Reduced motion swaps digits without the fold. */
+  function clockParts() {
+    var p = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit", hour12: true }).formatToParts(new Date()), o = {};
+    p.forEach(function (x) { o[x.type] = x.value; });
+    var h = String(o.hour || ""), m = String(o.minute || "00");
+    return { h1: h.length > 1 ? h.charAt(0) : "", h2: h.slice(-1), m1: m.charAt(0), m2: m.charAt(1), ap: String(o.dayPeriod || "").toUpperCase() };
+  }
+  function flipFace(v) { return '<span class="flip__half flip__top"><span>' + esc(v) + '</span></span><span class="flip__half flip__bottom"><span>' + esc(v) + "</span></span>"; }
+  function flipCard(key, v) { return '<span class="flip' + (key === "ap" ? " flip--ap" : "") + (v === "" ? " is-blank" : "") + '" data-f="' + key + '" data-v="' + esc(v) + '">' + flipFace(v) + "</span>"; }
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function flipTo(el, v) {
+    var old = el.getAttribute("data-v");
+    if (old === v) return;
+    el.setAttribute("data-v", v); el.classList.toggle("is-blank", v === "");
+    if (reduceMotion) { el.innerHTML = flipFace(v); return; }
+    el.innerHTML = '<span class="flip__half flip__top"><span>' + esc(v) + '</span></span><span class="flip__half flip__bottom"><span>' + esc(old) + "</span></span>" +
+      '<span class="flip__half flip__top flip__flap flip__flap--down"><span>' + esc(old) + '</span></span><span class="flip__half flip__bottom flip__flap flip__flap--up"><span>' + esc(v) + "</span></span>";
+    clearTimeout(el._t); el._t = setTimeout(function () { el.innerHTML = flipFace(v); }, 700);
+  }
+  function tickClock() {
+    var c = clockParts();
+    document.querySelectorAll("[data-f]").forEach(function (el) { flipTo(el, c[el.getAttribute("data-f")]); });
+    document.querySelectorAll('[data-clock="time"]').forEach(function (el) { el.textContent = clockText(); });
+  }
   function clockHtml() {
-    var sem = semester(), now = new Date();
-    return '<div class="clock"><p class="clock__time" data-clock="time">' + esc(clockText()) + '</p><p class="clock__date" data-clock="date">' + esc(fmtLongDay(now)) + "</p>" +
+    var sem = semester(), now = new Date(), c = clockParts();
+    return '<div class="clock"><p class="sr">The time is <span data-clock="time">' + esc(clockText()) + "</span>.</p>" +
+      '<div class="flipclock" aria-hidden="true">' + flipCard("h1", c.h1) + flipCard("h2", c.h2) + '<span class="flip__colon"><i></i><i></i></span>' + flipCard("m1", c.m1) + flipCard("m2", c.m2) + flipCard("ap", c.ap) + "</div>" +
+      '<p class="clock__date" data-clock="date">' + esc(fmtLongDay(now)) + "</p>" +
       (sem.before || sem.after ? "" : '<p class="clock__week">Week ' + sem.week + " of " + sem.weeks + ", " + plural(sem.left, "day") + " left</p>") + "</div>";
   }
 
-  function viewHome() {
-    var all = items(), now = new Date(), week = new Date(now.getTime() + 7 * DAY), sem = semester(), today = dayNumber(now);
-    var open = all.filter(function (it) { return !isDone(it); }).sort(sortByDue);
-    var overdue = open.filter(function (it) { var d = due(it); return d && d < now; });
-    var next = open.filter(function (it) { var d = due(it); return d && d >= now && d <= week; });
-    var later = open.filter(function (it) { var d = due(it); return d && d > week; }).length;
-    var withEvents = showEvents() && gcal().events.length;
-    var dayBlocks = [];
-    for (var dn = today; dn < today + 7; dn++) {
-      var due7 = next.filter(function (it) { return dayNumber(due(it)) === dn; });
-      var evs = withEvents ? eventsOn(dn) : [];
-      if (!due7.length && !evs.length) continue;
-      var d = noonOf(dn), nm = dayName(d);
-      dayBlocks.push('<div class="day"><h3 class="day__h"><a href="#/d/' + isoDay(dn) + '">' + esc(nm) + "</a>" + (nm === fmtDay(d) ? "" : ' <span class="day__date">' + esc(fmtDay(d)) + "</span>") +
-        (due7.length ? ' <span class="day__count">' + plural(due7.length, "thing") + " due</span>" : "") + "</h3>" +
-        (evs.length ? eventList(evs) : "") + (due7.length ? rows(due7) : "") + "</div>");
-    }
-    var nextHtml = dayBlocks.length ? dayBlocks.join("") : '<p class="empty">Nothing due in the next 7 days.</p>';
-    var toggle = gcal().events.length ? '<label class="check check--sm"><input type="checkbox" id="show-events"' + (showEvents() ? " checked" : "") + "> Show my calendar events</label>" : "";
-
-    var cards = visibleCourses().map(function (c) {
-      var list = all.filter(function (it) { return it.courseId === c.id; }), n = counts(list);
-      var up = list.filter(function (it) { return !isDone(it) && due(it) && due(it) >= now; }).sort(sortByDue)[0];
+  function courseCards(list) {
+    var all = items(), now = new Date();
+    return list.map(function (c) {
+      var mine = all.filter(function (it) { return it.courseId === c.id; }), n = counts(mine);
+      var up = mine.filter(function (it) { return !isDone(it) && due(it) && due(it) >= now; }).sort(sortByDue)[0];
       var cs = (n.late ? '<span class="count">' + shape("late") + "<span><b>" + n.late + "</b> overdue</span></span>" : "") +
         '<span class="count">' + shape("todo") + "<span><b>" + n.week + "</b> due in 7 days</span></span>" + '<span class="count">' + shape("done") + "<span><b>" + n.done + "</b> done</span></span>";
       return '<a class="sign" href="#/c/' + esc(c.id) + '">' + cbadge(c, "lg") + '<span><span class="sign__name">' + esc(c.shortName || c.code) + '</span><br><span class="sign__role">' + esc(c.name) + "</span>" +
         '<span class="sign__counts">' + cs + "</span>" +
         (up ? '<p class="sign__next">Next up<b>' + esc(up.title) + "</b>" + esc(fmtDay(due(up)) + ", " + fmtTime(due(up))) + "</p>" : '<p class="sign__next">Nothing coming up.</p>') + "</span></a>";
     }).join("");
+  }
+  function viewCourses() {
+    var shown = visibleCourses(), hidden = state.data.courses.filter(function (c) { return c.hidden === "yes"; });
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">Courses</h1><p>Your ' + esc(cfg.semesterLabel || "") + " courses from bCourses. Open one for everything it has, its announcements and its settings.</p></div>" +
+      (shown.length ? '<section class="section" aria-label="Courses"><div class="signs">' + courseCards(shown) + "</div></section>"
+        : '<p class="empty">' + (state.data.settings.hasToken ? "No courses yet. They show up after the first bCourses check." : 'No courses yet. <a href="#/about/sync">Connect bCourses</a> and they show up right away.') + "</p>") +
+      (hidden.length ? '<section class="section" aria-labelledby="hc-h"><h2 id="hc-h">Hidden courses</h2><p class="section__note">Left off This week, All work, the email and the calendar. Open one to show it again.</p><ul class="hidden-courses">' +
+        hidden.map(function (c) { return '<li><a href="#/c/' + esc(c.id) + '">' + chip(c) + "</a> " + esc(c.name) + "</li>"; }).join("") + "</ul></section>" : "") + "</div>";
+  }
 
-    // The side column: clock and month, what's next on your calendar, and announcements.
-    var upNext = gcal().events.filter(function (e) { return !e.allDay && evEnd(e) > now; }).slice(0, 3);
+  /* This week, laptop first: Today leads (your schedule and what's due today), then anything overdue,
+     then the rest of the week through Sunday. The side column holds the clock, the month, the semester and announcements. */
+  function viewHome() {
+    var all = items(), now = new Date(), sem = semester(), today = dayNumber(now), sunday = weekOf(now) + 6;
+    var open = all.filter(function (it) { return !isDone(it); }).sort(sortByDue);
+    var overdue = open.filter(function (it) { var d = due(it); return d && d < now; });
+    var dueToday = open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) === today; });
+    var doneToday = all.filter(function (it) { return isDone(it) && due(it) && dayNumber(due(it)) === today; }).length;
+    var evsToday = state.data.calendar ? eventsOn(today) : [];
+    var rest = open.filter(function (it) { var d = due(it); return d && dayNumber(d) > today && dayNumber(d) <= sunday; });
+    var nextWeek = open.filter(function (it) { var d = due(it); return d && dayNumber(d) > sunday && dayNumber(d) <= sunday + 7; }).length;
+
+    var todayHtml = '<section class="today" aria-labelledby="td-h"><div class="today__head"><h2 id="td-h">Today</h2><p>' + esc(fmtLongDay(now)) + "</p></div>" +
+      (state.data.calendar ? '<div class="today__block"><h3 class="today__h">Schedule</h3>' +
+        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : evsToday.length ? eventList(evsToday) : '<p class="empty empty--tight">Nothing on your calendar today.</p>') + "</div>" : "") +
+      '<div class="today__block"><h3 class="today__h">Due today' + (doneToday ? ' <span class="day__count">' + doneToday + " done</span>" : "") + "</h3>" +
+      (dueToday.length ? rows(dueToday) : '<p class="empty empty--tight">' + (doneToday ? "All done for today." : "Nothing due today.") + "</p>") + "</div></section>";
+
+    var groups = [];
+    for (var dn = today + 1; dn <= sunday; dn++) {
+      var list = rest.filter(function (it) { return dayNumber(due(it)) === dn; });
+      if (!list.length) continue;
+      var d = noonOf(dn), nm = dayName(d);
+      groups.push('<div class="day"><h3 class="day__h"><a href="#/d/' + isoDay(dn) + '">' + esc(nm) + "</a>" + (nm === fmtDay(d) ? "" : ' <span class="day__date">' + esc(fmtDay(d)) + "</span>") +
+        ' <span class="day__count">' + plural(list.length, "thing") + " due</span></h3>" + rows(list) + "</div>");
+    }
+    var restHtml = '<section class="section" aria-labelledby="rw-h"><h2 id="rw-h">' + (today === sunday ? "Next week" : "Rest of this week") + "</h2>" +
+      (today === sunday ? '<p class="empty">Today is the last day of the week. ' + (nextWeek ? '<a href="#/all">' + plural(nextWeek, "thing") + " due next week</a>." : "Nothing due next week yet.") + "</p>"
+        : (groups.length ? groups.join("") : '<p class="empty">Nothing else due through Sunday.</p>') +
+          (nextWeek ? '<p class="section__note"><a href="#/all">' + plural(nextWeek, "thing") + " due next week</a></p>" : "")) +
+      '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>';
+
     var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && now - new Date(n.postedAt) < 7 * DAY; });
-    var rail = '<aside class="rail" aria-label="Calendar and announcements">' +
-      '<section class="card" aria-labelledby="cal-h"><h2 id="cal-h" class="sr">Clock and calendar</h2>' + clockHtml() + monthHtml() + "</section>" +
-      (state.data.calendar ? '<section class="rail__sec" aria-labelledby="up-h"><h2 id="up-h">Up next on your calendar</h2>' +
-        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : upNext.length ? eventList(upNext.map(function (e) { var x = Object.assign({}, e); x._showDay = true; return x; })) : '<p class="empty">Nothing else on your calendar soon.</p>') + "</section>" : "") +
+    var rail = '<aside class="rail" aria-label="Clock, calendar and announcements">' +
+      '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" +
+      progressHtml() +
       '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (recent.length ? ' <span class="h-count">' + recent.length + " this week</span>" : "") + "</h2>" +
       (recent.length ? newsCompact(recent.slice(0, 5)) : '<p class="empty">No announcements this week.</p>') +
       '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
 
-    return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + esc(fmtLongDay(now)) + ', <span data-clock="time">' + esc(clockText()) + "</span>" + (sem.before || sem.after ? "" : ". Week " + sem.week + " of " + sem.weeks) + ". " +
-      (overdue.length ? plural(overdue.length, "thing") + " overdue, " : "") + plural(next.length, "thing") + " due in the next 7 days.</p></div>" +
-      progressHtml() +
-      '<div class="home"><div class="home__main">' +
+    var weekLeft = rest.length + dueToday.length;
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + (sem.before || sem.after ? "" : "Week " + sem.week + " of " + sem.weeks + ". ") +
+      (overdue.length ? plural(overdue.length, "thing") + " overdue, " : "") + plural(weekLeft, "thing") + " still due through Sunday.</p></div>" +
+      '<div class="home"><div class="home__main">' + todayHtml +
       (overdue.length ? '<section class="section section--alert" aria-labelledby="od-h"><h2 id="od-h">Overdue</h2>' + rows(overdue) + "</section>" : "") +
-      '<section class="section" aria-labelledby="nx-h"><div class="h-row"><h2 id="nx-h">Next 7 days</h2>' + toggle + "</div>" + nextHtml +
-      (later ? '<p class="section__note"><a href="#/all">' + plural(later, "more thing") + " due after that</a></p>" : "") +
-      '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section></div>' + rail + "</div>" +
-      '<section class="section" aria-labelledby="cs-h"><h2 id="cs-h">Courses</h2>' + (cards ? '<div class="signs">' + cards + "</div>" : (state.data.settings.hasToken ? '<p class="empty">No courses yet. They show up after the first bCourses check.</p>' : '<p class="empty">No courses yet. <a href="#/about/sync">Connect bCourses</a> and they show up right away.</p>')) + "</section>" +
-      "</div>";
+      restHtml + "</div>" + rail + "</div></div>";
   }
 
   function newsCompact(list) {
@@ -457,7 +500,7 @@
     var news = state.data.announcements.filter(function (n) { return n.courseId === id; });
     var hub = safeUrl(c.hubUrl), url = safeUrl(c.url);
     var score = c.score !== "" && c.score != null ? '<details class="score"><summary>Current score on bCourses</summary><p><b>' + esc(c.score) + "%</b>" + (c.grade ? " (" + esc(c.grade) + ")" : "") + ". It counts only what's been graded, the same way bCourses does.</p></details>" : "";
-    return '<div class="wrap"><div class="head"><a class="crumb" href="#/">This week</a>' +
+    return '<div class="wrap"><div class="head"><a class="crumb" href="#/courses">Courses</a>' +
       '<div class="detail__who">' + cbadge(c, "lg") + "<div><h1 tabindex=\"-1\">" + esc(c.shortName || c.code) + "</h1><p>" + esc(c.name) + (c.hidden === "yes" ? ". Hidden from This week and All work." : "") + "</p></div></div>" +
       '<div class="actions">' + (url ? '<a class="btn btn--solid" href="' + esc(url) + '" target="_blank" rel="noopener">Open on bCourses' + newTab() + "</a>" : "") +
       (hub ? '<a class="btn" href="' + esc(hub) + '" target="_blank" rel="noopener">' + esc(c.hubLabel || "Open the team hub") + newTab() + "</a>" : "") +
@@ -708,7 +751,7 @@
     var h = location.hash.replace(/^#\/?/, "").split("/");
     var view = h[0] || "home";
     document.querySelectorAll("[data-nav]").forEach(function (a) {
-      var on = a.getAttribute("data-nav") === (view === "c" || view === "i" || view === "d" ? "home" : view);
+      var on = a.getAttribute("data-nav") === (view === "c" ? "courses" : view === "i" || view === "d" ? "home" : view);
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     if (!state.data) return;
@@ -716,6 +759,7 @@
     if (view === "c") { var c = course(h[1]); html = viewCourse(h[1]); if (c) title = c.shortName; }
     else if (view === "i") { var it = byId(state.data.items, h[1]); html = viewItem(h[1]); if (it) title = it.title; }
     else if (view === "all") { html = viewAll(); title = "All work"; }
+    else if (view === "courses") { html = viewCourses(); title = "Courses"; }
     else if (view === "d") { html = viewDay(h[1]); var dd = dayFromIso(h[1]); if (!isNaN(dd)) title = fmtLongDay(noonOf(dd)); }
     else if (view === "news") { html = viewNews(); title = "Announcements"; }
     else if (view === "about") { html = viewAbout(); title = "About and settings"; }
@@ -728,6 +772,7 @@
     route._moved = true;
     if (!route._keepFocus) window.scrollTo(0, 0);
     route._keepFocus = false;
+    if (!route._keepFocus) reveal();
     if (view === "about" && h[1]) { var sec = document.getElementById(h[1]); if (sec) { sec.scrollIntoView(); var hd = sec.querySelector("h2"); if (hd) hd.focus({ preventScroll: true }); } }
   }
   /* Re-render in place (after a save or a filter change) without jumping to the top. */
@@ -923,6 +968,19 @@
       return '<p class="peek__meta">' + chip(course(n.courseId)) + "<span>" + (at ? esc(dayName(at)) + ", " + esc(fmtTime(at)) : "") + "</span></p><p class=\"peek__title\">" + esc(n.title) + "</p>" +
         '<p class="peek__body">' + esc(plainPreview(n.message, 420)) + "</p>" + '<p class="peek__foot">' + (n.author ? esc(n.author) + ". " : "") + "Opens on bCourses.</p>";
     }
+    if (kind === "d") {
+      var dn = dayFromIso(id); if (isNaN(dn)) return "";
+      var dl = items().filter(function (it) { return due(it) && dayNumber(due(it)) === dn; }).sort(sortByDue);
+      var openD = dl.filter(function (it) { return !isDone(it); }), doneD = dl.length - openD.length, evD = state.data.calendar ? eventsOn(dn) : [];
+      var li = function (t, sub) { return "<li>" + t + (sub ? '<span class="peek__sub">' + sub + "</span>" : "") + "</li>"; };
+      var dueHtml = openD.length ? '<ul class="peek__list">' + openD.slice(0, 5).map(function (it) {
+        var c = course(it.courseId); return li(cbadge(c, "sm") + " <b>" + esc(it.title) + "</b>", esc(fmtTime(due(it))) + (statusKey(it) === "late" ? ", " + esc(statusWord(it).toLowerCase()) : ""));
+      }).join("") + (openD.length > 5 ? li("+ " + (openD.length - 5) + " more") : "") + "</ul>" : "";
+      var evHtml = evD.length ? '<ul class="peek__list">' + evD.slice(0, 5).map(function (e) { return li('<span class="peek__dash" aria-hidden="true"></span> ' + esc(e.title), esc(evWhen(e))); }).join("") + (evD.length > 5 ? li("+ " + (evD.length - 5) + " more") : "") + "</ul>" : "";
+      return '<p class="peek__title">' + esc(fmtLongDay(noonOf(dn))) + "</p>" +
+        (dueHtml ? '<p class="peek__label">Due' + (doneD ? ", " + doneD + " already done" : "") + "</p>" + dueHtml : '<p class="peek__when">' + (doneD ? "Everything due is done." : "Nothing due.") + "</p>") +
+        (evHtml ? '<p class="peek__label">On your calendar</p>' + evHtml : "") + '<p class="peek__foot">Click for the whole day.</p>';
+    }
     if (kind === "e") {
       var e = byId(gcal().events, id); if (!e) return "";
       return '<p class="peek__meta"><span>' + esc(e.calendar) + "</span>" + (e.tentative ? "<span>Maybe</span>" : "") + "</p><p class=\"peek__title\">" + esc(e.title) + "</p>" +
@@ -972,13 +1030,48 @@
   window.addEventListener("scroll", function () { if (peekOn) hidePeek(); }, { passive: true });
   document.addEventListener("click", function () { if (peekOn) hidePeek(true); });
 
-  /* The clock on This week: the time ticks over each minute; a new day re-draws the page. */
+  /* The clock: checked every second so the cards flip right as the minute turns; a new day re-draws the page. */
   var shownDay = dayNumber(new Date());
   setInterval(function () {
     var now = new Date();
     if (dayNumber(now) !== shownDay) { shownDay = dayNumber(now); if (state.data && !document.querySelector("dialog[open]")) refresh(); return; }
-    document.querySelectorAll('[data-clock="time"]').forEach(function (el) { el.textContent = clockText(); });
-  }, 15000);
+    if (document.visibilityState === "visible") tickClock();
+  }, 1000);
+
+  /* Reveal on scroll (the same "gentle reveal" as gregor-posadas.github.io): blocks below the fold fade up a few
+     pixels as they scroll into view. Nothing is hidden until this runs, blocks already on screen show at once,
+     keyboard focus shows a block right away, and anyone who asked for reduced motion gets no effect. */
+  var revealIO = null;
+  function reveal() {
+    if (revealIO) { revealIO.disconnect(); revealIO = null; }
+    if (!("IntersectionObserver" in window) || reduceMotion) return;
+    var LIST = "ul.rows, ul.evts, ul.newsc, ul.news, .signs, .day";
+    var picked = [];
+    main.querySelectorAll(".section, .today, .rail").forEach(function (sec) {
+      Array.prototype.forEach.call(sec.children, function (c) {
+        if (c.matches(LIST)) Array.prototype.forEach.call(c.children, function (x) { if (x.matches("ul.rows")) Array.prototype.push.apply(picked, x.children); else picked.push(x); });
+        else picked.push(c);
+      });
+    });
+    var vh = window.innerHeight, pending = [];
+    picked.forEach(function (el) { if (el.getBoundingClientRect().top >= vh * 0.95) { el.classList.add("rv"); pending.push(el); } });
+    if (!pending.length) return;
+    document.documentElement.classList.add("rv-on");
+    function done(el) { el.classList.remove("rv", "rv-in"); el.style.removeProperty("--rv-d"); }
+    function show(el, delay) {
+      if (!el.classList.contains("rv") || el.classList.contains("rv-in")) return;
+      if (delay) el.style.setProperty("--rv-d", delay + "ms");
+      el.classList.add("rv-in");
+      setTimeout(function () { done(el); }, 900 + (delay || 0));
+    }
+    revealIO = new IntersectionObserver(function (es) {
+      var n = 0;
+      es.forEach(function (e) { if (!e.isIntersecting) return; revealIO.unobserve(e.target); show(e.target, Math.min(n++, 4) * 70); });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0 });
+    pending.forEach(function (el) { revealIO.observe(el); });
+  }
+  document.addEventListener("focusin", function (e) { var el = e.target.closest && e.target.closest(".rv"); if (el) { if (revealIO) revealIO.unobserve(el); el.classList.remove("rv", "rv-in"); } });
+  window.addEventListener("beforeprint", function () { main.querySelectorAll(".rv").forEach(function (el) { el.classList.remove("rv", "rv-in"); }); });
 
   /* ---------- light and dark mode ---------- */
   function effectiveTheme() {
@@ -1002,7 +1095,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005065155";
+  var BUILD = "20261005072656";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

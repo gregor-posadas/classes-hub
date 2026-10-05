@@ -16,7 +16,8 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 
 | Page | What it's for |
 | --- | --- |
-| **This week** | Semester clock and how much of the work due so far is done, anything overdue, and the next 7 days grouped by day with your calendar events. A side column has a clock, a month calendar (dots for what's due, in course colors, and a dash for events), what's next on your calendar, and this week's announcements. A card for each course sits below. Point at any assignment, event or announcement for a preview. |
+| **This week** | Built for a laptop. **Today** leads: your schedule from Google Calendar and what's due today. Then anything overdue, then the rest of the week through Sunday. The side column has a split-flap clock, a month calendar (dots for what's due, in course colors, and a dash for events; point at a day for a preview), the semester bars, and this week's announcements. Point at any assignment or announcement for a preview. |
+| **Courses** | A card for each course, plus any you've hidden. |
 | **Day page** | Everything due on one day plus that day's events. Open it from the month calendar or a day heading. |
 | **Course page** | Everything for one course by due date, its announcements, an **Open on bCourses** button, and a button to a team hub if it has one (DevEng C200 links to the Microbe Busters Hub). **Course settings** lets you rename or hide a course. |
 | **Assignment page** | Due date, what bCourses says (submitted, missing, graded), the instructions from bCourses, **Open on bCourses**, **Add to Google Calendar**, and your own progress (To do, In progress, Done). |
