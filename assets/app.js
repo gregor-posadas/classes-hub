@@ -458,7 +458,7 @@
       return '<li><span class="st">' + shape(x[0]) + x[1] + "</span><span>" + x[2] + "</span></li>";
     }).join("");
     var last = s.lastSyncOk ? fmtDay(new Date(s.lastSyncOk)) + ", " + fmtTime(new Date(s.lastSyncOk)) : "never";
-    return '<div class="wrap"><div class="head"><h1 tabindex="-1">About and settings</h1><p>Your Fall 2026 classes in one place. The hub reads bCourses every 2 hours and keeps a copy in a Google Sheet. It only reads: it never submits, posts or changes anything on bCourses.</p></div>' +
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">About and settings</h1><p>Your ' + esc(cfg.semesterLabel || "") + ' classes in one place. The hub reads bCourses every 2 hours and keeps a copy in a Google Sheet. It only reads: it never submits, posts or changes anything on bCourses.</p></div>' +
       '<section class="section" id="email" aria-labelledby="email-h"><h2 id="email-h" tabindex="-1">Morning email</h2>' +
       '<p class="section__note">Comes at 8 AM, only on days with something to say: what\'s overdue, what\'s due in the next 2 days, assignments new on bCourses, and announcements. Each item links to its page here.</p>' +
       '<fieldset class="picker picker--email"><legend class="sr">How often you get the morning email</legend><div class="picker__opts" data-email>' +
@@ -468,7 +468,7 @@
       '<p class="section__note">Last read ' + esc(last) + ". " + (s.syncError ? esc(s.syncError) : "No problems.") + "</p>" +
       '<div class="actions"><button type="button" class="btn btn--solid" data-act="sync-now"' + (state.demo ? " disabled" : "") + ">Check bCourses now</button>" +
       (store.get("code") ? '<button type="button" class="btn btn--quiet" data-act="forget-code">Forget the access code on this device</button>' : "") + "</div>" +
-      (s.calendar === false ? "" : '<p class="section__note" style="margin-top:16px">Every due date is also on your "Fall 2026 classes" Google Calendar, which the hub keeps up to date. Nobody is invited to those events.</p>') + "</section>" +
+      (s.calendar === false ? "" : '<p class="section__note" style="margin-top:16px">Every due date is also on your "' + esc((cfg.semesterLabel || "") + ' classes') + '" Google Calendar, which the hub keeps up to date. Nobody is invited to those events.</p>') + "</section>" +
       '<section class="section" aria-labelledby="sym-h"><h2 id="sym-h">What the symbols mean</h2><p class="section__note">Each status has its own shape and word, and each course its own number on its badge, so color is never the only clue.</p><ul class="legend">' + legend + "</ul></section>" +
       '<section class="section" aria-labelledby="faq-h"><h2 id="faq-h">Questions</h2>' +
       faq("An assignment I can see on bCourses isn't here.", "<p>The hub checks every 2 hours, so it may just be new: use <b>Check bCourses now</b> above. If it still doesn't show, the course may hide its Assignments page from students (the course page says so), or the work lives on another site like Gradescope. Add it yourself with <b>Add a to-do</b>.</p>") +
@@ -683,6 +683,7 @@
   });
   if (window.matchMedia) { try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintToggle); } catch (e) { /* old browsers */ } }
   paintToggle();
+  var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
   var BUILD = "__BUILD__";

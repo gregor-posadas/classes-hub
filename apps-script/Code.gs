@@ -6,10 +6,10 @@
  * run setup() once, then deploy as a web app. Full steps are in README.md.
  *
  * What it does:
- *  - Every 2 hours, reads your Fall 2026 courses, assignments (with your submission status)
+ *  - Every 2 hours, reads this semester's courses (TERM below), assignments (with your submission status)
  *    and announcements from bCourses, and keeps them in the Sheet.
  *  - Keeps your own progress (To do, In progress, Done) and your own to-dos next to them.
- *  - Puts every due date on a "Fall 2026 classes" Google Calendar, without inviting anyone.
+ *  - Puts every due date on a "<TERM> classes" Google Calendar, without inviting anyone.
  *  - Emails you at 8 AM, only on days with something to say.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
@@ -33,7 +33,7 @@ var DEFAULTS = {
   TERM: 'Fall 2026',               // courses whose bCourses term name contains this
   SEMESTER_START: '2026-08-26',    // used only if no course has a term with that name
   SEMESTER_END: '2026-12-18',
-  CALENDAR_NAME: 'Fall 2026 classes',
+  CALENDAR_NAME: '',              // empty = "<TERM> classes", for example "Fall 2026 classes"
   CALENDAR_SYNC: 'on',             // 'off' keeps due dates off Google Calendar
   EMAIL_PREF: 'daily',             // 'daily', 'weekly' (Mondays) or 'off'
   ANNOUNCEMENT_DAYS: '30',
@@ -74,7 +74,7 @@ function setup() {
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 
   if (setting('CALENDAR_SYNC') !== 'off' && !props.getProperty('CALENDAR_ID')) {
-    var cal = CalendarApp.createCalendar(setting('CALENDAR_NAME'), { timeZone: TZ, color: CalendarApp.Color.BLUE });
+    var cal = CalendarApp.createCalendar(setting('CALENDAR_NAME') || setting('TERM') + ' classes', { timeZone: TZ, color: CalendarApp.Color.BLUE });
     props.setProperty('CALENDAR_ID', cal.getId());
   }
   if (!props.getProperty('ACCESS_CODE')) props.setProperty('ACCESS_CODE', randomCode() + '-' + randomCode());
