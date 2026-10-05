@@ -623,3 +623,17 @@ a.evt__title:hover { text-decoration: underline; }
 .wk__day.is-today .wk__n { background: var(--ink); color: var(--paper); }
 @media (max-width: 559px) { .wk__day { min-height: 88px; padding: 8px 2px; } .wk__count { font-size: 0.7rem; } }
 .day--today > h2 .h-count { font-weight: 400; }
+
+/* Three progress bars on top */
+@media (min-width: 720px) { .semester__grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.meter--week .meter__bar i { background: var(--st-doing); }
+
+/* Announcements: new ones stand out, read ones fade back */
+.readtag { display: inline-flex; align-items: center; gap: 6px; font-size: var(--f1); font-weight: 700; }
+.readtag .st__shape { width: 14px; height: 14px; }
+.readtag--new { color: var(--ink); }
+.newdot { width: 9px; height: 9px; border-radius: 50%; background: var(--st-late); display: inline-block; }
+.newsc li.is-read, .news__item.is-read { opacity: 0.62; }
+.newsc li.is-read .newsc__title, .news__item.is-read .news__title { font-weight: 400; }
+.newsc li.is-read:hover, .newsc li.is-read:focus-within, .news__item.is-read:hover, .news__item.is-read:focus-within { opacity: 1; }
+.rail .card + .rail__sec { margin-top: 0; }

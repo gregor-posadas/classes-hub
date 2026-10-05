@@ -124,10 +124,11 @@ t('mergeItems keeps your status, marks vanished items removed, leaves to-dos alo
 
 t('normalizeAnnouncement maps the course and cleans the message', () => {
   const a = ctx.normalizeAnnouncement({ id: 7, title: 'Room change', posted_at: '2026-10-03T18:00:00Z', context_code: 'course_102', author: { display_name: 'Prof. Example' },
-    html_url: base + '/courses/102/discussion_topics/7', message: '<p>We meet in 534 Davis&nbsp;on Tuesday.</p>' }, { 102: 'c-102' }, base);
+    html_url: base + '/courses/102/discussion_topics/7', read_state: 'read', message: '<p>We meet in 534 Davis&nbsp;on Tuesday.</p>' }, { 102: 'c-102' }, base);
   assert.strictEqual(a.courseId, 'c-102');
   assert.strictEqual(a.message, 'We meet in 534 Davis on Tuesday.');
   assert.strictEqual(a.author, 'Prof. Example');
+  assert.strictEqual(a.read, 'yes');
 });
 
 t('htmlToText handles headings, tables and relative and odd links', () => {

@@ -399,7 +399,8 @@
    "postedAt": "2026-10-01T08:00:00-07:00",
    "author": "Course staff (sample)",
    "url": "https://bcourses.berkeley.edu/",
-   "message": "This week's talk is on decentralized water treatment in peri-urban areas. Reading is on the course page."
+   "message": "This week's talk is on decentralized water treatment in peri-urban areas. Reading is on the course page.",
+   "read": "yes"
   },
   {
    "id": "n-4",
@@ -408,7 +409,8 @@
    "postedAt": "2026-09-29T16:00:00-07:00",
    "author": "Course staff (sample)",
    "url": "https://bcourses.berkeley.edu/",
-   "message": "The research proposal prompt opens Friday morning. Start thinking about your question now."
+   "message": "The research proposal prompt opens Friday morning. Start thinking about your question now.",
+   "read": "yes"
   }
  ],
  "calendar": {

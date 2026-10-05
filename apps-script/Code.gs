@@ -25,7 +25,7 @@ var TABS = {
   Items: ['id', 'canvasId', 'courseId', 'kind', 'title', 'due', 'unlockAt', 'points', 'url', 'description', 'submissionTypes',
     'submitted', 'submittedAt', 'late', 'missing', 'score', 'grade', 'myStatus', 'updatedAt', 'calendarEventId', 'calendarSig',
     'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project'],
-  Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message'],
+  Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message', 'read'],
   Log: ['timestamp', 'action', 'detail']
 };
 
@@ -429,7 +429,8 @@ function normalizeAnnouncement(n, courseByCanvas, base) {
     postedAt: n.posted_at || n.delayed_post_at || '',
     author: n.author && n.author.display_name ? String(n.author.display_name) : (n.user_name || ''),
     url: n.html_url || '',
-    message: htmlToText(n.message || '', base).slice(0, 8000)
+    message: htmlToText(n.message || '', base).slice(0, 8000),
+    read: n.read_state === 'read' ? 'yes' : ''   // your read state on bCourses
   };
 }
 

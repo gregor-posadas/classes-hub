@@ -300,9 +300,12 @@
     var sem = semester(), now = new Date();
     var dueSoFar = items().filter(function (it) { var d = due(it); return d && d <= now && !(it.kind === "canvas" && noSubmit(it) && it.myStatus !== "done" && it.score === ""); });
     var turnedIn = dueSoFar.filter(isDone).length, wpct = dueSoFar.length ? Math.round(100 * turnedIn / dueSoFar.length) : 100;
-    return '<section class="semester rail__sec" aria-labelledby="prog-h"><h2 id="prog-h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid\">" +
+    var mon = weekOf(now), weekList = items().filter(function (it) { var d = due(it); return d && dayNumber(d) >= mon && dayNumber(d) <= mon + 6; });
+    var weekDone = weekList.filter(isDone).length, kpct = weekList.length ? Math.round(100 * weekDone / weekList.length) : 100, weekLeft = weekList.length - weekDone;
+    return '<section class="semester" aria-labelledby="prog-h"><h2 id="prog-h" class="semester__h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid semester__grid--3\">" +
       meter("prog-time", "of the semester has gone by", sem.pct, sem.before ? "Starts " + esc(fmtDay(sem.start)) : sem.after ? "The semester is over." : "Week " + sem.week + " of " + sem.weeks + ", " + plural(sem.left, "day") + " left. Ends " + esc(fmtDay(sem.end)) + ".", "meter--time") +
-      meter("prog-work", "of the work due so far is done", wpct, turnedIn + " of " + dueSoFar.length + " done", "meter--work") + "</div></section>";
+      meter("prog-work", "of the work due so far is done", wpct, dueSoFar.length ? turnedIn + " of " + dueSoFar.length + " done" : "Nothing due yet.", "meter--work") +
+      meter("prog-week", "of this week's work is done", kpct, weekList.length ? weekDone + " of " + weekList.length + " done" + (weekLeft ? ", " + weekLeft + " left through Sunday" : ". The week is clear.") : "Nothing due this week.", "meter--week") + "</div></section>";
   }
 
   /* ---------- your Google Calendar events ---------- */
@@ -462,30 +465,39 @@
         (nextWeek ? '<p class="section__note"><a href="#/all">' + plural(nextWeek, "thing") + " due next week</a></p>" : "");
     restHtml += '<div class="actions"><button type="button" class="btn" data-act="new-todo">Add a to-do</button></div></section>';
 
-    var evsToday = state.data.calendar ? eventsOn(today) : [];
-    var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && now - new Date(n.postedAt) < 7 * DAY; });
+    // Announcements: everything unread from the last 3 weeks, then this week's read ones, faded.
+    var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && (now - new Date(n.postedAt) < 7 * DAY || (!isRead(n) && now - new Date(n.postedAt) < 21 * DAY)); })
+      .sort(function (a, b) { return (isRead(a) - isRead(b)) || (a.postedAt < b.postedAt ? 1 : -1); });
+    var unread = recent.filter(function (n) { return !isRead(n); }).length;
     var rail = '<aside class="rail" aria-label="Clock, calendar and announcements">' +
       '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" +
-      (state.data.calendar ? '<section class="rail__sec" aria-labelledby="sc-h"><h2 id="sc-h">Today\'s schedule</h2>' +
-        (gcal().error ? '<p class="section__note">' + esc(gcal().error) + "</p>" : evsToday.length ? eventList(evsToday) : '<p class="empty">Nothing on your calendar today.</p>') + "</section>" : "") +
-      progressHtml() +
-      '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (recent.length ? ' <span class="h-count">' + recent.length + " this week</span>" : "") + "</h2>" +
-      (recent.length ? newsCompact(recent.slice(0, 5)) : '<p class="empty">No announcements this week.</p>') +
+      '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (unread ? ' <span class="h-count">' + unread + " new</span>" : "") + "</h2>" +
+      (recent.length ? newsCompact(recent.slice(0, 6)) : '<p class="empty">No announcements this week.</p>') +
       '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
 
     var weekLeft = open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) <= sunday; }).length;
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + (sem.before || sem.after ? "" : "Week " + sem.week + " of " + sem.weeks + ". ") +
       (overdue.length ? plural(overdue.length, "thing") + " overdue, " : "") + plural(weekLeft, "thing") + " still due through Sunday.</p></div>" +
+      progressHtml() +
       '<div class="home"><div class="home__main">' + strip +
       (overdue.length ? '<section class="section section--alert" aria-labelledby="od-h"><h2 id="od-h">Overdue</h2>' + rows(overdue) + "</section>" : "") +
       todayHtml + restHtml + "</div>" + rail + "</div></div>";
   }
 
+  /* Read or new: read on bCourses (the next check picks that up), or opened from here on this device. */
+  function localRead() { try { return JSON.parse(store.get("readNews") || "{}"); } catch (e) { return {}; } }
+  function isRead(n) { return n.read === "yes" || !!localRead()[n.id]; }
+  function markRead(id) {
+    var r = localRead(); r[id] = Date.now();
+    var keys = Object.keys(r); if (keys.length > 400) keys.sort(function (a, b) { return r[a] - r[b]; }).slice(0, keys.length - 400).forEach(function (k) { delete r[k]; });
+    store.set("readNews", JSON.stringify(r));
+  }
+  function readTag(n) { return isRead(n) ? '<span class="readtag">' + shape("done") + "Read</span>" : '<span class="readtag readtag--new"><i class="newdot" aria-hidden="true"></i>New</span>'; }
   function newsCompact(list) {
     return '<ul class="newsc">' + list.map(function (n) {
       var c = course(n.courseId), at = n.postedAt ? new Date(n.postedAt) : null, url = safeUrl(n.url);
-      return '<li data-peek="n:' + esc(n.id) + '"><p class="newsc__meta">' + chip(c) + "<span>" + (at ? esc(dayName(at)) : "") + "</span></p>" +
-        (url ? '<a class="newsc__title" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(n.title) + newTab() + "</a>" : '<span class="newsc__title">' + esc(n.title) + "</span>") + "</li>";
+      return '<li class="' + (isRead(n) ? "is-read" : "is-new") + '" data-peek="n:' + esc(n.id) + '"><p class="newsc__meta">' + chip(c) + "<span>" + (at ? esc(dayName(at)) : "") + "</span>" + readTag(n) + "</p>" +
+        (url ? '<a class="newsc__title" href="' + esc(url) + '" target="_blank" rel="noopener" data-read="' + esc(n.id) + '">' + esc(n.title) + newTab() + "</a>" : '<span class="newsc__title">' + esc(n.title) + "</span>") + "</li>";
     }).join("") + "</ul>";
   }
 
@@ -603,8 +615,8 @@
     return '<ul class="news">' + list.map(function (n) {
       var c = course(n.courseId), at = n.postedAt ? new Date(n.postedAt) : null, url = safeUrl(n.url);
       var preview = plainPreview(n.message, 220), long = String(n.message || "").length > 240;
-      return '<li class="news__item"><p class="news__meta">' + (withCourse ? chip(c) : "") + "<span>" + (at ? esc(dayName(at)) + ", " + esc(fmtTime(at)) : "") + "</span>" + (n.author ? "<span>" + esc(n.author) + "</span>" : "") + "</p>" +
-        '<h3 class="news__title">' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(n.title) + newTab() + "</a>" : esc(n.title)) + "</h3>" +
+      return '<li class="news__item ' + (isRead(n) ? "is-read" : "is-new") + '"><p class="news__meta">' + (withCourse ? chip(c) : "") + "<span>" + (at ? esc(dayName(at)) + ", " + esc(fmtTime(at)) : "") + "</span>" + (n.author ? "<span>" + esc(n.author) + "</span>" : "") + readTag(n) + "</p>" +
+        '<h3 class="news__title">' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" data-read="' + esc(n.id) + '">' + esc(n.title) + newTab() + "</a>" : esc(n.title)) + "</h3>" +
         (long ? '<details class="news__more"><summary><span class="news__preview">' + esc(preview) + '</span><span class="news__toggle">Read it all</span></summary><div class="news__body">' + richText(n.message) + "</div></details>"
           : '<div class="news__body">' + richText(n.message) + "</div>") + "</li>";
     }).join("") + "</ul>";
@@ -916,6 +928,9 @@
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
   });
   document.addEventListener("click", function (ev) {
+    var r = ev.target.closest && ev.target.closest("[data-read]");
+    if (r) { markRead(r.getAttribute("data-read")); setTimeout(refresh, 50); return; }
+    if (ev.target.closest && ev.target.closest(".news__more summary")) { var li = ev.target.closest(".news__item"), a = li && li.querySelector("[data-read]"); if (a) { markRead(a.getAttribute("data-read")); var t = li.querySelector(".readtag"); if (t) t.outerHTML = readTag({ id: a.getAttribute("data-read"), read: "yes" }); li.classList.add("is-read"); li.classList.remove("is-new"); } }
     var b = ev.target.closest("[data-act]"); if (!b) return;
     var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
     if (act === "new-todo") openDialog(todoForm(null, b.getAttribute("data-course")), function (v) { return saveTodo(null, v); });
@@ -1115,7 +1130,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005073553";
+  var BUILD = "20261005074858";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
