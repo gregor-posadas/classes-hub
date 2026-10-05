@@ -471,7 +471,7 @@
     var unread = recent.filter(function (n) { return !isRead(n); }).length;
     var rail = '<aside class="rail" aria-label="Clock, calendar and announcements">' +
       '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" +
-      '<section class="rail__sec" aria-labelledby="hn-h"><h2 id="hn-h">Announcements' + (unread ? ' <span class="h-count">' + unread + " new</span>" : "") + "</h2>" +
+      '<section class="rail__sec" aria-labelledby="hn-h"><div class="rail__head"><h2 id="hn-h">Announcements' + (unread ? ' <span class="h-count">' + unread + " new</span>" : "") + "</h2>" + markAllBtn(unread) + "</div>" +
       (recent.length ? newsCompact(recent.slice(0, 6)) : '<p class="empty">No announcements this week.</p>') +
       '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
 
@@ -487,11 +487,24 @@
   /* Read or new: read on bCourses (the next check picks that up), or opened from here on this device. */
   function localRead() { try { return JSON.parse(store.get("readNews") || "{}"); } catch (e) { return {}; } }
   function isRead(n) { return n.read === "yes" || !!localRead()[n.id]; }
-  function markRead(id) {
-    var r = localRead(); r[id] = Date.now();
+  function markRead(id, many) {
+    var ids = [].concat(many || id), r = localRead();
+    ids.forEach(function (x) { r[x] = Date.now(); });
+    // Also tell the backend, so other devices agree. An older backend without this just ignores it.
+    if (!state.demo) apiPost({ action: "markRead", ids: ids }, "Saving").catch(function () { /* this device still remembers */ });
     var keys = Object.keys(r); if (keys.length > 400) keys.sort(function (a, b) { return r[a] - r[b]; }).slice(0, keys.length - 400).forEach(function (k) { delete r[k]; });
     store.set("readNews", JSON.stringify(r));
   }
+  /* Marks every unread announcement shown on this page (the side column on This week, or the filtered list on Announcements). */
+  function markAllRead() {
+    var ids = Array.prototype.map.call(main.querySelectorAll(".is-new [data-read]"), function (a) { return a.getAttribute("data-read"); });
+    if (!ids.length) return;
+    markRead(null, ids);
+    state.data.announcements.forEach(function (n) { if (ids.indexOf(n.id) > -1) n.read = "yes"; });
+    refresh(); toast("Marked " + plural(ids.length, "announcement") + " as read");
+    var h = document.getElementById("hn-h") || document.querySelector("main h1"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+  }
+  function markAllBtn(count) { return count ? '<button type="button" class="btn btn--quiet btn--sm" data-act="mark-all-read">Mark all as read</button>' : ""; }
   function readTag(n) { return isRead(n) ? '<span class="readtag">' + shape("done") + "Read</span>" : '<span class="readtag readtag--new"><i class="newdot" aria-hidden="true"></i>New</span>'; }
   function newsCompact(list) {
     return '<ul class="newsc">' + list.map(function (n) {
@@ -624,9 +637,11 @@
   function viewNews() {
     var f = store.get("f.ncourse") || "";
     var list = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && (!f || n.courseId === f); });
+    var unread = list.filter(function (n) { return !isRead(n); }).length;
     function opt(v, label) { return '<option value="' + esc(v) + '"' + (v === f ? " selected" : "") + ">" + esc(label) + "</option>"; }
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">Announcements</h1><p>From the last 30 days of bCourses, newest first. Each title opens the announcement on bCourses.</p></div>' +
-      '<form class="toolbar" id="news-filter" aria-label="Filter announcements"><div class="field"><label for="f-ncourse">Course</label><select id="f-ncourse" name="ncourse">' + opt("", "All courses") + visibleCourses().map(function (c) { return opt(c.id, c.shortName); }).join("") + "</select></div></form>" +
+      '<form class="toolbar" id="news-filter" aria-label="Filter announcements"><div class="field"><label for="f-ncourse">Course</label><select id="f-ncourse" name="ncourse">' + opt("", "All courses") + visibleCourses().map(function (c) { return opt(c.id, c.shortName); }).join("") + "</select></div>" +
+      (unread ? '<p class="toolbar__note">' + unread + " new</p>" + markAllBtn(unread).replace("btn--sm", "") : "") + "</form>" +
       (list.length ? newsList(list, !f) : '<p class="empty">No announcements in the last 30 days.</p>') + "</div>";
   }
 
@@ -957,6 +972,7 @@
       });
     }
     if (act === "save-calendars") saveCalendars(b);
+    if (act === "mark-all-read") markAllRead();
     if (act === "cal-prev" || act === "cal-next" || act === "cal-today") {
       var p0 = parts(new Date()), cur = calMonth || { y: +p0.year, m: +p0.month };
       if (act === "cal-today") calMonth = null;
@@ -1130,7 +1146,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005074858";
+  var BUILD = "20261005075355";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

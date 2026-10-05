@@ -155,6 +155,7 @@ function doPost(e) {
         return json({ ok: true, result: team, data: payload() });
       case 'clearTeamCode': return json(clearTeamCode());
       case 'saveCalendars': return json(saveCalendars(b.exclude || []));
+      case 'markRead': return json(markRead(b.ids || []));
       default: throw new Error('Unknown action.');
     }
   } catch (err) {
@@ -254,7 +255,7 @@ function payload() {
     items: readTable('Items').filter(function (x) { return x.removed !== 'yes'; }).map(function (x) {
       delete x.calendarEventId; delete x.calendarSig; return x;
     }),
-    announcements: readTable('Announcements'),
+    announcements: withHubReads(readTable('Announcements')),
     calendar: googleCalendar(),
     settings: {
       emailPref: setting('EMAIL_PREF'),
@@ -651,6 +652,21 @@ function clearToken() {
   props.setProperty('SYNC_ERROR', '');
   log('token', 'removed from the site');
   return { ok: true };
+}
+
+/* Announcements you marked read in the hub (one at a time or Mark all as read), so every device agrees.
+   Kept as a short list of ids in Script properties; bCourses' own read state counts too. */
+function hubReads() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('HUB_READ') || '[]'); } catch (e) { return []; } }
+function withHubReads(list) {
+  var read = {}; hubReads().forEach(function (id) { read[id] = true; });
+  return list.map(function (n) { if (read[n.id]) n.read = 'yes'; return n; });
+}
+function markRead(ids) {
+  var cur = hubReads(), seen = {};
+  cur.concat((ids || []).map(String)).forEach(function (id) { if (/^n-\d+$/.test(id)) seen[id] = true; });
+  var all = Object.keys(seen).slice(-600);   // newest last; a semester's worth
+  PropertiesService.getScriptProperties().setProperty('HUB_READ', JSON.stringify(all));
+  return { ok: true, read: (ids || []).length };
 }
 
 function publicItem(it) { var o = Object.assign({}, it); delete o.calendarEventId; delete o.calendarSig; return o; }

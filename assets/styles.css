@@ -637,3 +637,7 @@ a.evt__title:hover { text-decoration: underline; }
 .newsc li.is-read .newsc__title, .news__item.is-read .news__title { font-weight: 400; }
 .newsc li.is-read:hover, .newsc li.is-read:focus-within, .news__item.is-read:hover, .news__item.is-read:focus-within { opacity: 1; }
 .rail .card + .rail__sec { margin-top: 0; }
+.rail__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 4px 12px; border-bottom: 2px solid var(--rule-strong); padding-bottom: 4px; }
+.rail__head h2 { font-size: var(--f2); padding-bottom: 4px; }
+.btn--sm { min-height: 40px; font-size: var(--f1); padding: 0 6px; }
+.toolbar__note { align-self: center; font-weight: 700; }
