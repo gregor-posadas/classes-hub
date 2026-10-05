@@ -292,7 +292,7 @@
       left: Math.max(0, dayNumber(e) - dayNumber(now)), before: now < s, after: now > e };
   }
   function meter(id, label, value, meta, cls) {
-    return '<div class="meter ' + cls + '"><p class="meter__label" id="' + id + '"><b>' + value + "%</b> " + label + "</p>" +
+    return '<div class="meter ' + cls + '" tabindex="0" data-peek="m:' + id + '"><p class="meter__label" id="' + id + '"><b>' + value + '%</b> <span class="meter__term">' + label + "</span></p>" +
       '<div class="meter__bar" role="progressbar" aria-labelledby="' + id + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + value + '"><i style="width:' + value + '%"></i></div>' +
       '<p class="meter__meta">' + meta + "</p></div>";
   }
@@ -1032,6 +1032,17 @@
         (dueHtml ? '<p class="peek__label">Due' + (doneD ? ", " + doneD + " already done" : "") + "</p>" + dueHtml : '<p class="peek__when">' + (doneD ? "Everything due is done." : "Nothing due.") + "</p>") +
         (evHtml ? '<p class="peek__label">On your calendar</p>' + evHtml : "") + '<p class="peek__foot">Click for the whole day.</p>';
     }
+    if (kind === "m") {
+      var M = {
+        "prog-time": ["How far through the semester you are", "Days gone by since instruction began (" + fmtDay(semester().start) + "), out of every day until the semester ends (" + fmtDay(semester().end) + "). It moves on its own, one day at a time."],
+        "prog-work": ["Your track record so far", "Everything whose due date has already passed this semester: bCourses assignments, " + teamName() + " assignments and your own to-dos. It counts as done if bCourses shows it submitted, or you marked it Done.",
+          "In-class or on-paper work is left out until it's graded or you mark it Done, since bCourses can't tell whether you did it."],
+        "prog-week": ["How this week is going", "Everything due Monday through Sunday of this week, from every course, and how much of it is done. It starts over every Monday.",
+          "Work due later this week counts as soon as you finish it early."]
+      }[id];
+      if (!M) return "";
+      return '<p class="peek__title">' + esc(M[0]) + '</p><p class="peek__body">' + esc(M[1]) + "</p>" + (M[2] ? '<p class="peek__foot">' + esc(M[2]) + "</p>" : "");
+    }
     if (kind === "e") {
       var e = byId(gcal().events, id); if (!e) return "";
       return '<p class="peek__meta"><span>' + esc(e.calendar) + "</span>" + (e.tentative ? "<span>Maybe</span>" : "") + "</p><p class=\"peek__title\">" + esc(e.title) + "</p>" +
@@ -1146,7 +1157,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005075355";
+  var BUILD = "20261005080044";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

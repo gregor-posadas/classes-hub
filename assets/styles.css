@@ -641,3 +641,7 @@ a.evt__title:hover { text-decoration: underline; }
 .rail__head h2 { font-size: var(--f2); padding-bottom: 4px; }
 .btn--sm { min-height: 40px; font-size: var(--f1); padding: 0 6px; }
 .toolbar__note { align-self: center; font-weight: 700; }
+/* Progress bars explain themselves on hover or keyboard focus */
+.meter { cursor: help; border-radius: 2px; }
+.meter__term { text-decoration: underline dotted; text-decoration-thickness: 2px; text-underline-offset: 4px; text-decoration-color: var(--ink-2); }
+.meter:focus-visible { outline: 3px solid var(--focus); outline-offset: 6px; }
