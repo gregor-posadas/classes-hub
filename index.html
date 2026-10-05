@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classes Hub</title>
+<meta name="description" content="Gregor's Fall 2026 classes in one place: what's due, what's turned in, and announcements from bCourses.">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="fonts/AtkinsonHyperlegibleNext-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/AtkinsonHyperlegibleNext-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23385F96'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='700' font-size='16' fill='%23fff' text-anchor='middle'%3ECH%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css?v=__BUILD__">
+<script>try { var chTheme = localStorage.getItem("ch.theme"); if (chTheme) document.documentElement.setAttribute("data-theme", chTheme); } catch (e) {}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="band" role="banner">
+  <div class="band__inner">
+    <a class="brand" href="#/">
+      <span class="brand__name">Classes Hub</span>
+      <span class="brand__sub">Fall 2026, UC Berkeley</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#/" data-nav="home">This week</a>
+      <a href="#/all" data-nav="all">All work</a>
+      <a href="#/news" data-nav="news">Announcements</a>
+      <a href="#/about" data-nav="about">About and settings</a>
+    </nav>
+    <button type="button" class="theme-toggle" id="theme-toggle">Light mode</button>
+  </div>
+</header>
+<div id="busy" class="busy" hidden><span class="busy__bar"></span></div>
+<p id="busy-text" class="sr" role="status" aria-live="polite"></p>
+<div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+<main id="main" tabindex="-1" aria-busy="true">
+  <div class="wrap"><div class="head"><p class="loading-msg" role="status">Getting your classes</p><div class="skel skel--h1"></div><div class="skel skel--line"></div></div><div class="skel skel--bar"></div></div>
+</main>
+<footer class="foot">
+  <p id="foot-status"></p>
+</footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><p class="wrap">This site needs JavaScript to show your classes.</p></noscript>
+<script src="assets/config.js?v=__BUILD__"></script>
+<script src="assets/app.js?v=__BUILD__"></script>
+</body>
+</html>
