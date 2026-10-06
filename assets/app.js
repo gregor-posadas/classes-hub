@@ -113,7 +113,25 @@
   function bcoursesBase() { return (state.data.settings && state.data.settings.canvasUrl) || cfg.bcoursesUrl || "https://bcourses.berkeley.edu"; }
 
   /* ---------- items: assignments from bCourses and your own to-dos ---------- */
-  function isDone(it) { return it.submitted === "yes" || it.myStatus === "done"; }
+  function isDone(it) { return it.submitted === "yes" || it.myStatus === "done" || submittedForThis(it); }
+  /* A to-do that links to a bCourses assignment (the CE 282 journal you resubmit every week) counts as done when
+     that assignment's latest submission falls in this to-do's week: from 6 days before it's due to a day after. */
+  var canvasIdx = { list: null, map: {} };
+  function linkedAssignment(it) {
+    if (!it || it.kind !== "mine" || !it.link) return null;
+    var m = /\/courses\/\d+\/assignments\/(\d+)/.exec(it.link); if (!m) return null;
+    if (canvasIdx.list !== state.data.items) {
+      canvasIdx = { list: state.data.items, map: {} };
+      state.data.items.forEach(function (x) { if (x.kind === "canvas" && x.canvasId) canvasIdx.map[x.canvasId] = x; });
+    }
+    return canvasIdx.map[m[1]] || null;
+  }
+  function submittedForThis(it) {
+    var a = linkedAssignment(it), d = it && it.due ? new Date(it.due).getTime() : 0;
+    if (!a || !a.submittedAt || !d) return false;
+    var t = new Date(a.submittedAt).getTime();
+    return t > d - 6 * DAY && t <= d + DAY;
+  }
   function noSubmit(it) { return it.kind === "canvas" && /^(none|on_paper|not_graded|)$/.test(String(it.submissionTypes || "").split(",")[0]) ; }
   var LABEL = { todo: "To do", doing: "In progress", done: "Done", late: "Overdue", missing: "Missing", submitted: "Submitted" };
   function statusKey(it) {
@@ -124,7 +142,7 @@
   }
   function statusWord(it) {
     var k = statusKey(it);
-    if (k === "done") return it.submitted === "yes" ? (it.grade === "Excused" ? "Excused" : "Submitted") : "Done";
+    if (k === "done") return it.submitted === "yes" ? (it.grade === "Excused" ? "Excused" : "Submitted") : submittedForThis(it) ? "Submitted" : "Done";
     if (k === "late") return it.missing === "yes" ? "Missing" : "Overdue";
     return LABEL[k];
   }
@@ -204,8 +222,17 @@
     body.code = store.get("code") || "";
     return tracked(fetch(cfg.apiUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (!j.ok) { var e = new Error(j.error || "The change wasn't saved."); e.code = j.code; throw e; } return j; }), msg || "Saving");
+      .then(function (j) { if (!j.ok) { var e = new Error(j.error || "The change wasn't saved."); e.code = j.code; throw e; } setTimeout(saveCache, 0); return j; }), msg || "Saving");
   }
+  /* The last data the hub loaded is kept on this device, so the page can show it right away and update after. */
+  function saveCache() {
+    if (state.demo || !state.data) return;
+    try { window.localStorage.setItem("ch.cache", JSON.stringify({ at: Date.now(), data: state.data })); } catch (e) { /* full or blocked: just slower next time */ }
+  }
+  function readCache() {
+    try { var c = JSON.parse(window.localStorage.getItem("ch.cache") || "null"); return c && c.data && c.data.items ? c : null; } catch (e) { return null; }
+  }
+  function dropCache() { try { window.localStorage.removeItem("ch.cache"); } catch (e) { /* ignore */ } }
   function setData(d) {
     d.courses = d.courses || []; d.items = d.items || []; d.announcements = d.announcements || []; d.settings = d.settings || {}; d.me = d.me || {};
     d.calendar = d.calendar || null; d.settings.teamHub = d.settings.teamHub || null;
@@ -214,7 +241,13 @@
   }
   function load() {
     var p = state.demo ? tracked(fetch("data/demo.json").then(function (r) { return r.json(); }).then(shiftDemo), "Loading") : apiGet();
-    return p.then(setData);
+    return p.then(function (d) { state.stale = 0; setData(d); saveCache(); });
+  }
+  /* Fresh data arrived while you were looking at the saved copy: redraw in place, unless you're typing or in a dialog. */
+  function applyFresh() {
+    var a = document.activeElement;
+    if (document.querySelector("dialog[open]") || (a && main.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { state.pendingRefresh = true; return; }
+    state.pendingRefresh = false; refresh();
   }
   function showNotice() {
     var n = document.getElementById("notice"), s = state.data.settings;
@@ -225,7 +258,7 @@
     if (n.innerHTML) n.hidden = false;
     var fs = document.getElementById("foot-status"), ok = s.lastSyncOk ? new Date(s.lastSyncOk) : null;
     var dn = ok ? dayName(ok) : "", when = dn === "Today" ? "today" : "on " + dn;
-    fs.textContent = state.demo ? "Showing demo data." : ok ? "bCourses last checked " + when + " at " + fmtTime(ok) + ". It's checked every 2 hours." : "bCourses hasn't been read yet.";
+    fs.textContent = state.demo ? "Showing demo data." : state.stale ? "Showing your copy from " + fmtTime(new Date(state.stale)) + ". Getting the latest…" : ok ? "bCourses last checked " + when + " at " + fmtTime(ok) + ". It's checked every 2 hours." : "bCourses hasn't been read yet.";
   }
 
   /* ---------- rich text from bCourses: [label](url) links, "- " bullets, "### " headings ---------- */
@@ -563,7 +596,11 @@
     var c = course(it.courseId), d = due(it), k = statusKey(it), mine = it.kind === "mine", team = it.kind === "team";
     var unlock = it.unlockAt && new Date(it.unlockAt) > new Date() ? '<p class="section__note">Opens on bCourses ' + esc(fmtDay(new Date(it.unlockAt))) + ", " + esc(fmtTime(new Date(it.unlockAt))) + ".</p>" : "";
     var canvasLine = "";
-    if (team) canvasLine = "Your assignment in the " + teamName() + " Hub" + (it.project ? ", for " + it.project : "") + ". Changing your progress here changes it there too.";
+    var linked = mine ? linkedAssignment(it) : null;
+    if (linked) canvasLine = submittedForThis(it)
+      ? "Submitted on bCourses " + fmtDay(new Date(linked.submittedAt)) + ", " + fmtTime(new Date(linked.submittedAt)) + ", so this week's is done."
+      : "Linked to an assignment on bCourses. It's marked done on its own once you submit there this week (the hub checks every 2 hours).";
+    else if (team) canvasLine = "Your assignment in the " + teamName() + " Hub" + (it.project ? ", for " + it.project : "") + ". Changing your progress here changes it there too.";
     else if (!mine) {
       if (it.submitted === "yes") canvasLine = "bCourses shows this " + (it.grade === "Excused" ? "excused" : "submitted" + (it.submittedAt ? " " + fmtDay(new Date(it.submittedAt)) + ", " + fmtTime(new Date(it.submittedAt)) : "")) + (it.late === "yes" ? ", marked late" : "") + ".";
       else if (it.missing === "yes") canvasLine = "bCourses marks this missing.";
@@ -848,7 +885,7 @@
     dlg.innerHTML = html;
     document.body.appendChild(dlg);
     var close = function () { dlg.close(); };
-    dlg.addEventListener("close", function () { if (dlg.parentNode) dlg.remove(); if (opener && document.contains(opener)) opener.focus(); });
+    dlg.addEventListener("close", function () { if (dlg.parentNode) dlg.remove(); if (opener && document.contains(opener)) opener.focus(); if (state.pendingRefresh) setTimeout(applyFresh, 0); });
     dlg.querySelectorAll("[data-close]").forEach(function (b) { b.addEventListener("click", close); });
     var form = dlg.querySelector("form");
     if (form) form.addEventListener("submit", function (ev) {
@@ -884,11 +921,33 @@
       '<div class="field"><label for="td-course">Course</label><select id="td-course" name="courseId">' + opts + "</select></div>" +
       '<div class="two"><div class="field"><label for="td-date">Due date</label><input id="td-date" name="date" type="date" value="' + esc(lp.date) + '"><small>Optional.</small></div><div class="field"><label for="td-time">Due time</label><input id="td-time" name="time" type="time" value="' + esc(lp.time) + '"></div></div>' +
       '<div class="field"><label for="td-notes">Notes</label><textarea id="td-notes" name="description" style="min-height:110px">' + esc(it.description) + "</textarea><small>Start lines with a dash for a list.</small></div>" +
-      '<div class="field"><label for="td-link">Link</label><input id="td-link" name="link" type="url" value="' + esc(it.link) + '" placeholder="https://"><small>Optional, for example the reading or the Gradescope page.</small></div>' +
+      '<div class="field"><label for="td-link">Link</label><input id="td-link" name="link" type="url" value="' + esc(it.link) + '" placeholder="https://"><small>Optional, for example the reading or the Gradescope page. If it\'s a bCourses assignment, the to-do is marked done once you submit there.</small></div>' +
+      (editing ? (it.series ? '<p class="section__note" style="margin:0">Part of a weekly series. Changes here apply to this week only.</p>' : "") :
+        '<div class="two"><div class="field"><label for="td-repeat">Repeats</label><select id="td-repeat" name="repeat"><option value="">Doesn\'t repeat</option><option value="weekly">Every week</option></select></div>' +
+        '<div class="field"><label for="td-until">Until</label><input id="td-until" name="until" type="date" value="' + esc(cfg.semesterEnd || "") + '"><small>Last date one can be due.</small></div></div>') +
       '</div><div class="dlg__foot">' + (editing ? '<button type="button" class="btn btn--danger" data-act="delete-todo" data-id="' + esc(it.id) + '">Delete to-do</button>' : "") +
       '<button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn--solid">' + (editing ? "Save changes" : "Add to-do") + "</button></div></form>";
   }
+  /* Creates several to-dos at once (a weekly series). Uses one call when the backend has it, or one call each otherwise. */
+  function createTodos(list) {
+    return apiPost({ action: "saveTodos", items: list }, "Adding").then(function (r) { return r.demo ? list : r.items; }).catch(function (e) {
+      if (!/Unknown action/.test(e.message || "")) throw e;
+      return list.reduce(function (p, it) { return p.then(function (acc) { return apiPost({ action: "saveTodo", item: it }, "Adding").then(function (r) { acc.push(r.item || it); return acc; }); }); }, Promise.resolve([]));
+    }).then(function (saved) { saved.forEach(function (x) { state.data.items.push(x); }); return saved; });
+  }
   function saveTodo(existing, v) {
+    if (!existing && v.repeat === "weekly") {
+      var title = String(v.title || "").trim(), first = dayFromIso(v.date), last = dayFromIso(v.until || cfg.semesterEnd || "");
+      if (!title) return Promise.reject(new Error("Give the to-do a title."));
+      if (isNaN(first)) return Promise.reject(new Error("Pick the first due date. It repeats every week from there."));
+      if (isNaN(last) || last < first) return Promise.reject(new Error("Pick an end date on or after the first due date."));
+      var series = "s-" + Math.random().toString(36).slice(2, 10), list = [];
+      for (var dn = first; dn <= last && list.length < 40; dn += 7) list.push({ id: newId("m"), kind: "mine", myStatus: "todo", title: title, courseId: v.courseId || "", due: zonedIso(isoDay(dn), v.time), description: v.description || "", link: v.link || "", series: series, firstSeenAt: new Date().toISOString() });
+      return createTodos(list).then(function (saved) {
+        location.hash = "#/i/" + saved[0].id;
+        toast("Added " + plural(saved.length, "to-do") + ", one each week through " + fmtDay(noonOf(first + 7 * (saved.length - 1))) + (state.demo ? " (demo, not saved)" : ""));
+      });
+    }
     var it = Object.assign({}, existing || { id: newId("m"), kind: "mine", myStatus: "todo", firstSeenAt: new Date().toISOString() },
       { title: String(v.title || "").trim(), courseId: v.courseId || "", due: v.date ? zonedIso(v.date, v.time) : "", description: v.description || "", link: v.link || "" });
     if (!it.title) return Promise.reject(new Error("Give the to-do a title."));
@@ -901,13 +960,17 @@
   }
   function confirmDeleteTodo(id) {
     var it = byId(state.data.items, id); if (!it) return;
-    openDialog('<form method="dialog">' + dlgHead("Delete this to-do?") + '<div class="dlg__body"><p><b>' + esc(it.title) + "</b> will be removed from the hub and from your calendar. This can't be undone.</p></div>" +
-      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it</button><button type="submit" class="btn btn--solid">Delete to-do</button></div></form>', function () {
-      return apiPost({ action: "deleteTodo", id: id }).then(function (r) {
-        var c = it.courseId;
-        state.data.items = state.data.items.filter(function (x) { return x.id !== id; });
+    var later = it.series ? state.data.items.filter(function (x) { return x.series === it.series && x.id !== id && (!it.due || !x.due || new Date(x.due) >= new Date(it.due)); }) : [];
+    var choice = later.length ? '<fieldset class="checks"><legend>Which ones?</legend><label class="check"><input type="radio" name="which" value="one" checked> Just this one</label>' +
+      '<label class="check"><input type="radio" name="which" value="later"> This one and the ' + plural(later.length, "later one") + " in the series</label></fieldset>" : "";
+    openDialog('<form method="dialog">' + dlgHead("Delete this to-do?") + '<div class="dlg__body"><p><b>' + esc(it.title) + "</b> will be removed from the hub and from your calendar. This can't be undone.</p>" + choice + "</div>" +
+      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it</button><button type="submit" class="btn btn--solid">Delete</button></div></form>', function (v) {
+      var andLater = v.which === "later";
+      return apiPost({ action: "deleteTodo", id: id, andLater: andLater }).then(function (r) {
+        var c = it.courseId, ids = r.ids && r.ids.length ? r.ids : [id].concat(andLater ? later.map(function (x) { return x.id; }) : []);
+        state.data.items = state.data.items.filter(function (x) { return ids.indexOf(x.id) < 0; });
         location.hash = c ? "#/c/" + c : "#/";
-        toast("Deleted" + (r.demo ? " (demo, not saved)" : ""));
+        toast((ids.length > 1 ? "Deleted " + ids.length + " to-dos" : "Deleted") + (r.demo ? " (demo, not saved)" : ""));
       });
     });
   }
@@ -952,7 +1015,7 @@
     if (act === "edit-todo") { var it = byId(state.data.items, id); openDialog(todoForm(it), function (v) { return saveTodo(it, v); }); }
     if (act === "delete-todo") { ev.preventDefault(); var d = b.closest("dialog"); if (d) d.close(); confirmDeleteTodo(id); }
     if (act === "edit-course") { var c = course(id); openDialog(courseForm(c), function (v) { return saveCourse(c, v); }); }
-    if (act === "forget-code") { store.del("code"); toast("Access code removed from this device"); start(); }
+    if (act === "forget-code") { store.del("code"); dropCache(); toast("Access code removed from this device"); start(); }
     if (act === "sync-now") {
       b.disabled = true; b.classList.add("is-working"); b.textContent = "Checking bCourses";
       apiPost({ action: "syncNow" }, "Checking bCourses").then(function (r) {
@@ -1157,7 +1220,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261005080044";
+  var BUILD = "20261006051712";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
@@ -1183,14 +1246,17 @@
     if (document.visibilityState !== "visible") return;
     if (Date.now() - lastCheck > 5 * 60000) checkVersion(false);
     if (!state.demo && state.data && Date.now() - loadedAt > 15 * 60000 && !document.querySelector("dialog[open]")) {
-      loadedAt = Date.now(); load().then(refresh).catch(function () { /* keep what we have */ });
+      loadedAt = Date.now(); load().then(applyFresh).catch(function () { /* keep what we have */ });
     }
   });
 
   function start() {
     if (!state.demo && !store.get("code")) { main.innerHTML = viewGate(""); return; }
-    load().then(function () { loadedAt = Date.now(); route(); }).catch(function (e) {
-      if (e.code === "code") { store.del("code"); main.innerHTML = viewGate("That code didn't work. Check ACCESS_CODE in the Apps Script project's Script properties and try again."); return; }
+    var cached = state.demo ? null : readCache();
+    if (cached) { state.stale = cached.at; setData(cached.data); route(); }
+    load().then(function () { loadedAt = Date.now(); if (cached) { showNotice(); applyFresh(); } else route(); }).catch(function (e) {
+      if (e.code === "code") { store.del("code"); dropCache(); state.data = null; main.innerHTML = viewGate("That code didn't work. Check ACCESS_CODE in the Apps Script project's Script properties and try again."); return; }
+      if (cached) { toast("Couldn't get the latest. Showing your saved copy."); return; }
       main.innerHTML = '<div class="wrap"><div class="head"><h1 tabindex="-1">Couldn\'t load your classes</h1><p>' + esc(e.message || "The server didn't respond.") + ' Check your connection, then reload the page.</p><div class="actions"><button class="btn btn--solid" type="button" onclick="location.reload()">Reload</button></div></div></div>';
     });
   }

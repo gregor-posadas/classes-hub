@@ -27,7 +27,9 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 
 **Done means done.** Anything you submit on bCourses is marked done on its own at the next check. Work turned in on paper, in class or on another site (Gradescope, say) won't show as submitted on bCourses, so set it to Done yourself.
 
-**Your own to-dos.** **Add a to-do** puts anything that isn't a bCourses assignment (a reading, a lab slot, a personal deadline) in the same lists, emails and calendar.
+**Your own to-dos.** **Add a to-do** puts anything that isn't a bCourses assignment (a reading, a lab slot, a personal deadline) in the same lists, emails and calendar. Set **Repeats: Every week** to make one per week until a date you pick (deleting one offers to delete the later ones too). If a to-do's link is a bCourses assignment, it's marked done once that assignment shows a submission in the to-do's week, which suits a journal you resubmit every week.
+
+**Fast loads.** The site shows the copy it loaded last time right away, then swaps in the latest. On the backend, a job every 10 minutes re-reads your Google calendars and the Microbe Busters Hub and builds the site's data ahead of time, so opening the site never waits on them.
 
 **Course colors.** Courses get the figure palette in order: blue `#385F96`, orange `#CF5921`, light blue `#9EB8DB`, gold `#E7B800`, maroon `#800000`. Every course badge also shows the course number as text, so color is never the only clue, and it reads the same in grayscale. A sixth course would reuse blue, still with its own number.
 
@@ -55,7 +57,7 @@ Some university Google accounts only allow web apps for people signed in to that
 ## Updating the backend after a change to `Code.gs`
 
 1. In the Apps Script editor, replace `Code.gs` with the new one from this repo, and `appsscript.json` too.
-2. If Google asks, approve the new permissions (Run `setup` once to trigger the prompt; it changes nothing that's already set up).
+2. Run `setup` once. It adds any new timed jobs (like the 10-minute background refresh), asks for new permissions if there are any, and changes nothing that's already set up.
 3. **Deploy > Manage deployments**, pencil icon, Version: **New version**, **Deploy**. The `/exec` URL stays the same.
 
 The Google Calendar events need the Google Calendar API service, which the new `appsscript.json` turns on. If the site says to turn it on, open **Services** (the + next to it) in the editor, add **Google Calendar API**, and deploy a new version.

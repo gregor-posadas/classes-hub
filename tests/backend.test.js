@@ -194,4 +194,32 @@ t('normalizeEvent keeps times and meeting links, drops declined and cancelled ev
   assert.strictEqual(ctx.normalizeEvent({ id: 'y', start: { dateTime: '2026-10-06T10:00:00-07:00' }, attendees: [{ self: true, responseStatus: 'declined' }] }, 'c'), null);
 });
 
+t('autoCompleteLinked marks the week whose window holds the latest journal submission', () => {
+  const link = 'https://bcourses.berkeley.edu/courses/1559283/assignments/9141348';
+  const items = [
+    { id: 'a-9141348', kind: 'canvas', canvasId: '9141348', submittedAt: '2026-10-09T21:30:00-07:00' },
+    { id: 'm-1', kind: 'mine', link, due: '2026-10-09T23:59:00-07:00', myStatus: 'todo' },
+    { id: 'm-2', kind: 'mine', link, due: '2026-10-16T23:59:00-07:00', myStatus: 'todo' },
+    { id: 'm-0', kind: 'mine', link, due: '2026-10-02T23:59:00-07:00', myStatus: 'todo' },
+    { id: 'm-3', kind: 'mine', link: 'https://example.com', due: '2026-10-09T23:59:00-07:00', myStatus: 'todo' }];
+  ctx.autoCompleteLinked(items, 'now');
+  const by = Object.fromEntries(items.map((x) => [x.id, x.myStatus]));
+  assert.deepStrictEqual([by['m-0'], by['m-1'], by['m-2'], by['m-3']], ['todo', 'done', 'todo', 'todo']);
+  items[0].submittedAt = '2026-10-10T22:00:00-07:00';   // a day late still counts for that week, not the next
+  items[1].myStatus = 'todo'; ctx.autoCompleteLinked(items, 'now');
+  assert.strictEqual(items[1].myStatus, 'done'); assert.strictEqual(items[2].myStatus, 'todo');
+});
+
+t('cachePutBig and cacheGetBig round-trip a value bigger than one cache entry', () => {
+  const store = {};
+  ctx.CacheService = { getScriptCache: () => ({ putAll: (m) => Object.assign(store, m), put: (k, v) => { store[k] = v; }, get: (k) => (k in store ? store[k] : null),
+    getAll: (ks) => Object.fromEntries(ks.map((k) => [k, store[k]])), remove: (k) => { delete store[k]; } }) };
+  const big = { s: 'x'.repeat(95000), list: [1, 2, 3] };
+  ctx.cachePutBig('payload', big, 60);
+  assert.strictEqual(store.payload, '4');
+  assert.strictEqual(JSON.stringify(ctx.cacheGetBig('payload')), JSON.stringify(big));
+  ctx.bustPayload();
+  assert.strictEqual(ctx.cacheGetBig('payload'), null);
+});
+
 console.log(n + ' checks passed');

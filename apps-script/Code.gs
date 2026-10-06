@@ -24,7 +24,7 @@ var TABS = {
   Courses: ['id', 'canvasId', 'code', 'name', 'shortName', 'color', 'textColor', 'url', 'hidden', 'hubUrl', 'hubLabel', 'score', 'grade', 'term', 'syncedAt', 'syncError'],
   Items: ['id', 'canvasId', 'courseId', 'kind', 'title', 'due', 'unlockAt', 'points', 'url', 'description', 'submissionTypes',
     'submitted', 'submittedAt', 'late', 'missing', 'score', 'grade', 'myStatus', 'updatedAt', 'calendarEventId', 'calendarSig',
-    'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project'],
+    'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project', 'series'],
   Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message', 'read'],
   Log: ['timestamp', 'action', 'detail']
 };
@@ -94,6 +94,8 @@ function setup() {
   var handlers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   if (handlers.indexOf('syncCanvas') < 0) ScriptApp.newTrigger('syncCanvas').timeBased().everyHours(2).create();
   if (handlers.indexOf('sendDailyDigest') < 0) ScriptApp.newTrigger('sendDailyDigest').timeBased().everyDays(1).atHour(8).inTimezone(TZ).create();
+  // Every 10 minutes: re-read your Google calendars and the team hub, and have the site's data ready, so opening the site never waits on them.
+  if (handlers.indexOf('refreshBackground') < 0) ScriptApp.newTrigger('refreshBackground').timeBased().everyMinutes(10).create();
 
   Logger.log('Setup done.');
   Logger.log('Your access code (enter it once on each device): ' + props.getProperty('ACCESS_CODE'));
@@ -118,8 +120,7 @@ function doGet(e) {
     var p = (e && e.parameter) || {};
     if (p.action === 'data') {
       checkCode(p.code);
-      refreshTeamHubIfStale();
-      return json({ ok: true, data: payload() });
+      return json({ ok: true, data: cachedPayload() });
     }
     return json({ ok: true, service: APP_NAME });
   } catch (err) {
@@ -133,10 +134,12 @@ function doPost(e) {
     var b = JSON.parse(e.postData.contents || '{}');
     checkCode(b.code);
     lock.waitLock(30000);
+    if (b.action !== 'sendDigest') bustPayload();   // anything that changes data makes the next page load rebuild it
     switch (b.action) {
       case 'setStatus': return json(setStatus(b.id, b.status));
       case 'saveTodo': return json(saveTodo(b.item || {}));
-      case 'deleteTodo': return json(deleteTodo(b.id));
+      case 'saveTodos': return json(saveTodos(b.items || []));
+      case 'deleteTodo': return json(deleteTodo(b.id, !!b.andLater));
       case 'saveCourse': return json(saveCourse(b.course || {}));
       case 'setEmailPref': return json(setEmailPref(b.pref));
       case 'syncNow':
@@ -525,6 +528,7 @@ function syncCanvas() {
     }
 
     try { items = mergeTeamItems(items, fetchTeamItems(courses), nowIso); } catch (e) { props.setProperty('TEAM_SYNC_ERROR', e.message); }
+    autoCompleteLinked(items, nowIso);
     syncItemCalendar(items, courses);
     writeTable('Courses', courses);
     writeTable('Items', items);
@@ -538,6 +542,7 @@ function syncCanvas() {
     props.setProperty('LAST_SYNC_OK', nowIso);
     props.setProperty('SYNC_ERROR', problems.length ? 'Part of bCourses could not be read: ' + problems.join(' ') : '');
     log('sync', result.courses + ' courses, ' + result.items + ' assignments' + (problems.length ? ', problems: ' + problems.join(' ') : ''));
+    bustPayload();
   } catch (err) {
     result.error = err.message;
     props.setProperty('LAST_SYNC', nowIso);
@@ -576,6 +581,7 @@ function saveTodo(input) {
     due: /^\d{4}-\d{2}-\d{2}T/.test(input.due || '') ? input.due : '',
     description: String(input.description || '').slice(0, 10000),
     link: /^https?:\/\//i.test(input.link || '') ? String(input.link) : '',
+    series: old ? old.series || '' : cleanSeries(input.series),
     updatedAt: cell(new Date())
   });
   syncItemCalendar([it], readTable('Courses'));
@@ -583,15 +589,57 @@ function saveTodo(input) {
   log(old ? 'to-do edit' : 'to-do add', it.title);
   return { ok: true, item: publicItem(it) };
 }
+function cleanSeries(v) { return /^s-[\w-]{1,40}$/.test(String(v || '')) ? String(v) : ''; }
 
-function deleteTodo(id) {
-  var it = indexBy(readTable('Items'))[id];
-  if (!it) return { ok: true };
+/** Several new to-dos at once, for example a weekly series. One Sheet write, one calendar pass. */
+function saveTodos(list) {
+  if (!list.length) return { ok: true, items: [] };
+  if (list.length > 40) throw new Error('That\'s more than 40 to-dos at once. Pick an earlier end date.');
+  var now = cell(new Date()), made = list.map(function (input) {
+    var title = String(input.title || '').trim();
+    if (!title) throw new Error('Every to-do needs a title.');
+    return { id: 'm-' + Utilities.getUuid().slice(0, 8), kind: 'mine', myStatus: 'todo', firstSeenAt: now, calendarEventId: '', calendarSig: '',
+      title: title.slice(0, 300), courseId: String(input.courseId || ''), due: /^\d{4}-\d{2}-\d{2}T/.test(input.due || '') ? input.due : '',
+      description: String(input.description || '').slice(0, 10000), link: /^https?:\/\//i.test(input.link || '') ? String(input.link) : '',
+      series: cleanSeries(input.series), updatedAt: now };
+  });
+  syncItemCalendar(made, readTable('Courses'));
+  writeTable('Items', readTable('Items').concat(made));
+  log('to-dos add', made.length + ': ' + made[0].title);
+  return { ok: true, items: made.map(publicItem) };
+}
+
+/** Deletes a to-do, or with andLater, it and every later one in its weekly series. */
+function deleteTodo(id, andLater) {
+  var items = readTable('Items'), it = indexBy(items)[id];
+  if (!it) return { ok: true, ids: [] };
   if (it.kind !== 'mine') throw new Error('Items from bCourses can\'t be deleted here.');
-  removeEvent(it.calendarEventId);
-  deleteRow('Items', id);
-  log('to-do delete', it.title);
-  return { ok: true };
+  var gone = items.filter(function (x) {
+    return x.id === id || (andLater && it.series && x.series === it.series && x.kind === 'mine' && (!it.due || !x.due || new Date(x.due) >= new Date(it.due)));
+  });
+  var ids = gone.map(function (x) { return x.id; });
+  gone.forEach(function (x) { removeEvent(x.calendarEventId); });
+  writeTable('Items', items.filter(function (x) { return ids.indexOf(x.id) < 0; }));
+  log('to-do delete', it.title + (ids.length > 1 ? ' and ' + (ids.length - 1) + ' later' : ''));
+  return { ok: true, ids: ids };
+}
+
+/**
+ * A to-do whose link points at a bCourses assignment (a journal you resubmit every week, say) is marked done
+ * when that assignment shows a submission from the 6 days before its due time up to a day after. Checked at
+ * every bCourses read, so each week's submission is caught before the next one replaces it.
+ */
+function autoCompleteLinked(items, nowIso) {
+  var byCanvas = {};
+  items.forEach(function (x) { if (x.kind === 'canvas' && x.canvasId) byCanvas[x.canvasId] = x; });
+  items.forEach(function (x) {
+    if (x.kind !== 'mine' || x.myStatus === 'done' || !x.due || !x.link) return;
+    var m = /\/courses\/\d+\/assignments\/(\d+)/.exec(x.link), a = m && byCanvas[m[1]];
+    if (!a || !a.submittedAt) return;
+    var t = new Date(a.submittedAt).getTime(), d = new Date(x.due).getTime();
+    if (t > d - 6 * 86400000 && t <= d + 86400000) { x.myStatus = 'done'; x.updatedAt = nowIso; }
+  });
+  return items;
 }
 
 function saveCourse(input) {
@@ -793,21 +841,58 @@ function mergeTeamItems(items, fetched, nowIso) {
   return out;
 }
 
-/** Keeps the team items fresh when you open the site: re-reads the team hub if it's been 10 minutes. */
-function refreshTeamHubIfStale() {
-  var props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('TEAM_HUB_CODE')) return;
-  var last = props.getProperty('TEAM_LAST_SYNC');
-  if (last && Date.now() - new Date(last).getTime() < 10 * 60000) return;
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(3000)) return;
+/**
+ * Runs every 10 minutes (set up by setup()): re-reads the team hub and your Google calendars, then builds the
+ * site's data ahead of time. Opening the site only reads that ready-made copy, so it never waits on these.
+ */
+function refreshBackground() {
+  var props = PropertiesService.getScriptProperties(), lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
   try {
-    var items = mergeTeamItems(readTable('Items'), fetchTeamItems(readTable('Courses')), cell(new Date()));
-    writeTable('Items', items);
-  } catch (e) {
-    props.setProperty('TEAM_SYNC_ERROR', e.message);
-    props.setProperty('TEAM_LAST_SYNC', cell(new Date()));   // don't retry on every page load
+    if (props.getProperty('TEAM_HUB_CODE')) {
+      try { writeTable('Items', mergeTeamItems(readTable('Items'), fetchTeamItems(readTable('Courses')), cell(new Date()))); }
+      catch (e) { props.setProperty('TEAM_SYNC_ERROR', e.message); props.setProperty('TEAM_LAST_SYNC', cell(new Date())); }
+    }
+    try { googleCalendar(true); } catch (e) { /* shown on the site */ }
+    bustPayload();
   } finally { lock.releaseLock(); }
+  cachedPayload();   // warm it up for the next visit
+}
+
+/* ------------------------------------------------------------------ fast page loads */
+
+/** The site's data, built at most once per change. Large, so it's stored in pieces under one key. */
+function cachedPayload() {
+  var hit = cacheGetBig('payload');
+  if (hit) return hit;
+  var data = payload();
+  cachePutBig('payload', data, 1800);
+  return data;
+}
+function bustPayload() { try { CacheService.getScriptCache().remove('payload'); } catch (e) { /* fine */ } }
+
+/** CacheService holds at most 100 KB per value, so big values are split across numbered keys. */
+var CACHE_CHUNK = 30000;
+function cachePutBig(key, obj, ttl) {
+  try {
+    var s = JSON.stringify(obj), n = Math.max(1, Math.ceil(s.length / CACHE_CHUNK)), map = {};
+    if (n > 200) return;   // too big to be worth caching
+    for (var i = 0; i < n; i++) map[key + '_' + i] = s.substr(i * CACHE_CHUNK, CACHE_CHUNK);
+    var c = CacheService.getScriptCache();
+    c.putAll(map, ttl);
+    c.put(key, String(n), ttl);   // written last, so a reader never sees half a value
+  } catch (e) { /* caching is only a speed-up */ }
+}
+function cacheGetBig(key) {
+  try {
+    var c = CacheService.getScriptCache(), n = Number(c.get(key) || 0);
+    if (!n) return null;
+    var keys = [];
+    for (var i = 0; i < n; i++) keys.push(key + '_' + i);
+    var parts = c.getAll(keys), s = '';
+    for (var j = 0; j < n; j++) { if (parts[keys[j]] == null) return null; s += parts[keys[j]]; }
+    return JSON.parse(s);
+  } catch (e) { return null; }
 }
 
 /** Saves the team code from the site after checking it with the team hub. Like the token, it's never sent back. */
@@ -843,9 +928,8 @@ function clearTeamCode() {
  * Leaves out the hub's own deadlines calendar (those are already items here) and any you switch off on the site.
  * Cached for 5 minutes. Only titles, times, places and meeting links come through, never descriptions or guests.
  */
-function googleCalendar() {
-  var cache = CacheService.getScriptCache(), hit = cache.get('gcal');
-  if (hit) { try { return JSON.parse(hit); } catch (e) { /* re-read */ } }
+function googleCalendar(force) {
+  if (!force) { var hit = cacheGetBig('gcal'); if (hit) return hit; }
   var props = PropertiesService.getScriptProperties(), own = props.getProperty('CALENDAR_ID') || '';
   var exclude = [];
   try { exclude = JSON.parse(setting('CAL_EXCLUDE') || '[]'); } catch (e) { exclude = []; }
@@ -873,7 +957,7 @@ function googleCalendar() {
   }
   out.events.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
   out.calendars.sort(function (a, b) { return (b.primary - a.primary) || a.name.localeCompare(b.name); });
-  try { cache.put('gcal', JSON.stringify(out), 300); } catch (e) { /* too big to cache */ }
+  cachePutBig('gcal', out, 21600);   // refreshed every 10 minutes by refreshBackground
   return out;
 }
 
@@ -898,9 +982,8 @@ function normalizeEvent(e, calendarName) {
 function saveCalendars(exclude) {
   var ids = (exclude || []).map(String).filter(function (x) { return x && x.length < 300; }).slice(0, 100);
   PropertiesService.getScriptProperties().setProperty('CAL_EXCLUDE', JSON.stringify(ids));
-  CacheService.getScriptCache().remove('gcal');
   log('calendars', ids.length + ' left out');
-  return { ok: true, calendar: googleCalendar() };
+  return { ok: true, calendar: googleCalendar(true) };
 }
 
 /* ------------------------------------------------------------------ the morning email */
