@@ -782,7 +782,7 @@
     var outside = minors.filter(function (m) { return m.list.length && m.list.every(function (c) { return !isCEE(c); }); });
     var envInMinor = [];
     minors.forEach(function (m) { m.list.forEach(function (c) { if (isEnvECore(c)) envInMinor.push(c); }); });
-    var minorRules = check(outside.length ? true : false, "At least one minor fully outside CEE", outside.length ? esc(outside.map(function (m) { return m.f.label; }).join(" and ")) + " is." : "Neither minor is outside CEE yet.") +
+    var minorRules = check(outside.length ? true : false, "At least one minor fully outside CEE", outside.length ? esc(outside.map(function (m) { return m.f.label; }).join(" and ")) + (outside.length > 1 ? " are." : " is.") : "Neither minor is outside CEE yet.") +
       check(envInMinor.length ? "warn" : true, "No environmental engineering courses in a minor", envInMinor.length ? "Move " + esc(envInMinor.map(function (c) { return c.code; }).join(", ")) + " out of the minor." : "CE 100 to 119, 173 and 200 to 219 can't go in a minor.");
 
     // Designated Emphasis
@@ -800,7 +800,11 @@
         "<b>" + (de.electives || 3) + " electives</b>: " + (electives.length ? electives.map(function (c) { return courseRef(c) + ", " + esc(c.de === "petition" ? "by petition" : (modNames[c.de] || c.de)); }).join("; ") : "none yet"),
         (electives.length < (de.electives || 3) ? plural((de.electives || 3) - electives.length, "more elective") + " to pick. " : "") + (petitions.length ? "A petition counts only once approved." : "")) +
       check(Object.keys(mods).length >= (de.minModules || 2) ? true : false, "Electives from at least " + (de.minModules || 2) + " of the 3 modules", Object.keys(mods).length ? "So far: " + esc(Object.keys(mods).sort().map(function (k) { return modNames[k] || k; }).join(", ")) + "." : "No module covered yet.") +
-      check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " elective from your home department (CEE)", home.length ? esc(home.map(function (c) { return c.code; }).join(", ")) + "." : "");
+      check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " elective from your home department (CEE)", home.length ? esc(home.map(function (c) { return c.code; }).join(", ")) + "." : "") +
+      (de.separateFromMinors ? (function () {
+        var both = active.filter(function (c) { return c.de && /^minor/.test(c.field); });
+        return check(both.length ? "warn" : true, "DE courses kept out of the minors", both.length ? esc(both.map(function (c) { return c.code; }).join(", ")) + " counts for both. Pick one." : "Your choice, so the DE stands on its own.");
+      })() : "");
 
     var sources = (PHDCFG.sources || []).map(function (s) { return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + newTab() + "</a>"; }).join(", ");
     return '<section class="section" aria-labelledby="rq-h"><h2 id="rq-h">Requirements</h2>' +
@@ -846,7 +850,7 @@
 
   function coursesHtml() {
     var p = phd(), order = ["in-progress", "planned", "done", "idea", "dropped"];
-    var fieldName = {}; (RULES.fields || []).forEach(function (f) { fieldName[f.key] = f.label; }); fieldName.none = "Not counted"; fieldName[""] = "Not placed";
+    var fieldName = {}; (RULES.fields || []).forEach(function (f) { fieldName[f.key] = f.label; }); fieldName.none = "Not counted"; fieldName[""] = "Not placed"; fieldName.de = "";
     var mods = (RULES.de || {}).modules || {};
     var deName = function (v) { return v === "core" ? "DE core" : v === "petition" ? "DE elective by petition" : mods[v] ? "DE elective, " + mods[v] : ""; };
     var groupsHtml = order.map(function (st) {
@@ -854,7 +858,7 @@
       if (!list.length) return "";
       var tbl = '<table class="pm-table ctbl"><caption>' + esc(C_STATUS[st]) + " <small>" + plural(list.length, "course") + '</small></caption><thead><tr><th scope="col">Course</th><th scope="col">Where and when</th><th scope="col">Counts as</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' +
         list.map(function (c) {
-          var counts2 = [fieldName[c.field] !== undefined ? fieldName[c.field] : c.field, c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", deName(c.de)].filter(Boolean).join("; ");
+          var counts2 = [fieldName[c.field] !== undefined ? fieldName[c.field] : c.field, c.field === "de" && !c.de ? "DE only" : "", c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", deName(c.de)].filter(Boolean).join("; ");
           return '<tr><td class="t"><span tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<small class="ctbl__title">' + esc(c.title) + "</small>" : "") + "</td>" +
             "<td>" + esc([c.school, c.term].filter(Boolean).join(", ") || "Not set") + (c.units ? "<small>" + esc(fmtUnits(units(c))) + "</small>" : "") + "</td>" +
             "<td>" + esc(counts2) + (c.approval ? '<small>Approved: ' + esc(c.approval) + "</small>" : "") + "</td>" +
@@ -924,7 +928,7 @@
       ["code", "Course number", "text", { required: true, hint: "For example CIVENG 203." }], ["title", "Title", "text"],
       ["school", "School", "text", { half: 1 }], ["term", "Term", "text", { half: 2, hint: "For example Spring 2027." }],
       ["units", "Units", "text", { half: 1 }], ["status", "Status", "select", { half: 2, opts: function () { return Object.keys(C_STATUS).map(function (k) { return [k, C_STATUS[k]]; }); } }],
-      ["field", "Counts toward", "select", { opts: function () { return [["", "Not placed yet"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["none", "Doesn't count toward the 30"]]); } }],
+      ["field", "Counts toward", "select", { opts: function () { return [["", "Not placed yet"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["de", "Only the Designated Emphasis"], ["none", "Doesn't count toward the 30"]]); } }],
       ["core", "Core area", "select", { half: 1, opts: function () { return [["", "None"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; })); } }],
       ["de", "Designated Emphasis", "select", { half: 2, opts: function () { var m = (RULES.de || {}).modules || {}; return [["", "Doesn't count"], ["core", "Core course"]].concat(Object.keys(m).map(function (k) { return [k, "Elective, " + m[k]]; })).concat([["petition", "Elective by petition"]]); } }],
       ["approval", "Approved by", "text", { hint: "Who said it counts, and when." }], ["notes", "Notes", "textarea"]] },
@@ -1619,7 +1623,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007020047";
+  var BUILD = "20261007022830";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

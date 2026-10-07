@@ -20,8 +20,8 @@ window.CH_CONFIG = {
       total: 30,
       fields: [
         { key: "major", label: "Major", min: 12, note: "From CE 200 to 219" },
-        { key: "minor-a", label: "Minor A", min: 6, note: "At least one minor outside CEE" },
-        { key: "minor-b", label: "Minor B", min: 6, note: "No environmental engineering courses" },
+        { key: "minor-a", label: "Minor 1", min: 6, note: "At least one minor outside CEE" },
+        { key: "minor-b", label: "Minor 2", min: 6, note: "No environmental engineering courses" },
         { key: "flexible", label: "Flexible", min: 6, note: "Any graduate course" }
       ],
       core: [
@@ -33,6 +33,7 @@ window.CH_CONFIG = {
         label: "Development Engineering DE",
         core: ["DEVENG C200", "DEVENG 210"],
         electives: 3, minModules: 2, maxHome: 1,
+        separateFromMinors: true,   // your choice: DE courses stay out of the minor fields
         modules: { m1: "Module 1, project design", m2: "Module 2, evaluation and social impact", m3: "Module 3, technology development" }
       }
     },

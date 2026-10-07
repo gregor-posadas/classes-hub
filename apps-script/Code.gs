@@ -40,7 +40,7 @@ var TABS = {
 var PHD = {
   courses: { tab: 'PhD coursework', prefix: 'pc-', need: 'code', choices: {
     status: ['planned', 'in-progress', 'done', 'idea', 'dropped'],
-    field: ['', 'major', 'minor-a', 'minor-b', 'flexible', 'none'],
+    field: ['', 'major', 'minor-a', 'minor-b', 'flexible', 'de', 'none'],   // 'de': counts only toward the Designated Emphasis
     de: ['', 'core', 'm1', 'm2', 'm3', 'petition'] } },
   milestones: { tab: 'PhD milestones', prefix: 'pm-', need: 'title', choices: {
     category: ['research', 'exam', 'coursework', 'fieldwork', 'funding', 'admin'],
