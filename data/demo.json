@@ -561,7 +561,8 @@
     "de": "",
     "approval": "Advisor, by email",
     "notes": "Sample course from a master's degree.",
-    "order": "1"
+    "order": "1",
+    "schedule": ""
    },
    {
     "id": "pc-2",
@@ -576,7 +577,8 @@
     "de": "",
     "approval": "Advisor, by email",
     "notes": "",
-    "order": "2"
+    "order": "2",
+    "schedule": ""
    },
    {
     "id": "pc-3",
@@ -591,7 +593,8 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "3"
+    "order": "3",
+    "schedule": ""
    },
    {
     "id": "pc-4",
@@ -606,7 +609,8 @@
     "de": "core",
     "approval": "",
     "notes": "DE core course. Before the qualifying exam.",
-    "order": "4"
+    "order": "4",
+    "schedule": "Fr 9:00 AM-11:59 AM"
    },
    {
     "id": "pc-5",
@@ -621,7 +625,8 @@
     "de": "m2",
     "approval": "",
     "notes": "",
-    "order": "5"
+    "order": "5",
+    "schedule": "Mo 9:00 AM-11:59 AM"
    },
    {
     "id": "pc-6",
@@ -636,7 +641,8 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "6"
+    "order": "6",
+    "schedule": "Mo 2:30 PM-5:29 PM"
    },
    {
     "id": "pc-7",
@@ -651,14 +657,15 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "7"
+    "order": "7",
+    "schedule": "TuTh 9:30 AM-10:59 AM"
    },
    {
     "id": "pc-8",
     "code": "CIVENG 206",
     "title": "Water resources (sample)",
     "school": "UC Berkeley",
-    "term": "Fall 2027",
+    "term": "Spring 2027",
     "units": "3",
     "status": "planned",
     "field": "major",
@@ -666,14 +673,15 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "8"
+    "order": "8",
+    "schedule": "Fr 2:00 PM-4:59 PM"
    },
    {
     "id": "pc-9",
     "code": "DEVENG 210",
     "title": "DE research seminar (sample)",
     "school": "UC Berkeley",
-    "term": "",
+    "term": "Spring 2027",
     "units": "2",
     "status": "planned",
     "field": "none",
@@ -681,7 +689,8 @@
     "de": "core",
     "approval": "",
     "notes": "",
-    "order": "9"
+    "order": "9",
+    "schedule": "Mo 10:00 AM-11:59 AM"
    },
    {
     "id": "pc-10",
@@ -696,7 +705,8 @@
     "de": "",
     "approval": "",
     "notes": "Spring: MoWe 9:30 to 10:59 AM.",
-    "order": "10"
+    "order": "10",
+    "schedule": ""
    },
    {
     "id": "pc-11",
@@ -711,7 +721,8 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "11"
+    "order": "11",
+    "schedule": "TuTh 12:30 PM-1:59 PM"
    },
    {
     "id": "pc-12",
@@ -726,7 +737,8 @@
     "de": "",
     "approval": "",
     "notes": "",
-    "order": "12"
+    "order": "12",
+    "schedule": "MoWe 12:30 PM-1:59 PM"
    },
    {
     "id": "pc-13",
@@ -741,7 +753,8 @@
     "de": "",
     "approval": "",
     "notes": "Spring: TuTh 9:00 to 10:59 AM.",
-    "order": "13"
+    "order": "13",
+    "schedule": "TuTh 9:00 AM-10:59 AM"
    },
    {
     "id": "pc-14",
@@ -756,7 +769,8 @@
     "de": "m1",
     "approval": "",
     "notes": "Thursdays 2:00 to 4:59 PM.",
-    "order": "14"
+    "order": "14",
+    "schedule": "Th 2:00 PM-4:59 PM"
    }
   ],
   "milestones": [
@@ -995,6 +1009,86 @@
     "url": "https://docs.google.com/document/",
     "notes": "",
     "order": "2"
+   }
+  ],
+  "programs": [
+   {
+    "id": "pg-a",
+    "program": "Sample mentoring program",
+    "title": "Earn the stipend (sample)",
+    "date": "",
+    "time": "",
+    "kind": "about",
+    "required": "3",
+    "status": "",
+    "link": "",
+    "notes": "Attend 3 of 4 sessions and submit a short video.",
+    "order": "0"
+   },
+   {
+    "id": "pg-1",
+    "program": "Sample mentoring program",
+    "title": "Session 1 (sample)",
+    "date": "2026-09-25",
+    "time": "3:00 to 5:00 PM",
+    "kind": "session",
+    "required": "yes",
+    "status": "attended",
+    "link": "",
+    "notes": "",
+    "order": "1"
+   },
+   {
+    "id": "pg-2",
+    "program": "Sample mentoring program",
+    "title": "Session 2 (sample)",
+    "date": "2026-10-09",
+    "time": "3:00 to 5:00 PM",
+    "kind": "session",
+    "required": "",
+    "status": "upcoming",
+    "link": "",
+    "notes": "",
+    "order": "2"
+   },
+   {
+    "id": "pg-3",
+    "program": "Sample mentoring program",
+    "title": "Session 3 (sample)",
+    "date": "2026-10-23",
+    "time": "3:00 to 5:00 PM",
+    "kind": "session",
+    "required": "yes",
+    "status": "upcoming",
+    "link": "",
+    "notes": "",
+    "order": "3"
+   },
+   {
+    "id": "pg-4",
+    "program": "Sample mentoring program",
+    "title": "Session 4 (sample)",
+    "date": "2026-11-06",
+    "time": "3:00 to 5:00 PM",
+    "kind": "session",
+    "required": "",
+    "status": "upcoming",
+    "link": "",
+    "notes": "",
+    "order": "4"
+   },
+   {
+    "id": "pg-5",
+    "program": "Sample mentoring program",
+    "title": "Deliverable: short video (sample)",
+    "date": "2026-12-04",
+    "time": "11:59 PM",
+    "kind": "deliverable",
+    "required": "yes",
+    "status": "todo",
+    "link": "",
+    "notes": "",
+    "order": "5"
    }
   ]
  },

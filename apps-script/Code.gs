@@ -13,7 +13,7 @@
  *  - Emails you at 8 AM, only on days with something to say.
  *  - Shows the events on your Google calendars next to your work (read only).
  *  - Brings in your assignments from the Microbe Busters Hub, and sends status changes back to it.
- *  - Keeps your PhD plan (coursework, milestones, open questions, contacts, fellowships, links) in six "PhD ..." tabs,
+ *  - Keeps your PhD plan (coursework, milestones, questions, contacts, fellowships, links, programs) in "PhD ..." tabs,
  *    and your instructors' office hours in an "Office hours" tab. Edit them from the site or in the Sheet.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
@@ -29,11 +29,12 @@ var TABS = {
     'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project', 'series'],
   Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message', 'read'],
   Log: ['timestamp', 'action', 'detail'],
-  'PhD coursework': ['id', 'code', 'title', 'school', 'term', 'units', 'status', 'field', 'core', 'de', 'approval', 'notes', 'order'],
+  'PhD coursework': ['id', 'code', 'title', 'school', 'term', 'units', 'status', 'field', 'core', 'de', 'approval', 'notes', 'order', 'schedule'],
   'PhD milestones': ['id', 'date', 'term', 'title', 'category', 'status', 'notes', 'link', 'order'],
   'PhD questions': ['id', 'question', 'who', 'status', 'answer', 'asked', 'link'],
   'PhD contacts': ['id', 'name', 'role', 'email', 'group'],
   'PhD links': ['id', 'label', 'url', 'notes', 'order'],
+  'PhD programs': ['id', 'program', 'title', 'date', 'time', 'kind', 'required', 'status', 'link', 'notes', 'order'],
   'PhD fellowships': ['id', 'name', 'sponsor', 'status', 'deadline', 'time', 'dates', 'amount', 'link', 'todo', 'notes', 'order'],
   'Office hours': ['id', 'courseId', 'name', 'role', 'day', 'start', 'end', 'place', 'link', 'how', 'notes', 'source', 'eventId']
 };
@@ -50,11 +51,14 @@ var PHD = {
   questions: { tab: 'PhD questions', prefix: 'pq-', need: 'question', choices: { status: ['open', 'answered'] } },
   contacts: { tab: 'PhD contacts', prefix: 'pp-', need: 'name', choices: {} },
   links: { tab: 'PhD links', prefix: 'pl-', need: 'label', choices: {} },
+  programs: { tab: 'PhD programs', prefix: 'pg-', need: 'title', choices: {
+    kind: ['session', 'event', 'deliverable', 'about'],
+    status: ['upcoming', 'past', 'attended', 'missed', 'todo', 'submitted', ''] } },
   fellowships: { tab: 'PhD fellowships', prefix: 'pf-', need: 'name', choices: {
     status: ['to-start', 'in-progress', 'submitted', 'planned', 'idea', 'not-eligible', 'awarded', 'declined'] } },
   officeHours: { tab: 'Office hours', prefix: 'oh-', need: 'name', choices: { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } }
 };
-var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts', 'fellowships', 'links'];
+var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts', 'fellowships', 'links', 'programs'];
 
 /* Settings. Each can be overridden in Project Settings > Script properties without editing code. */
 var DEFAULTS = {

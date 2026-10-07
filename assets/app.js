@@ -722,6 +722,9 @@
     var due = fellows().filter(function (f) { return F_OPEN[f.status] && f.deadline && dayFromIso(f.deadline) >= today; }).map(function (f) {
       return { id: f.id, title: f.name + " due" + (f.time && !/not stated/i.test(f.time) ? ", " + f.time : ""), date: f.deadline, term: "", category: "funding", status: "upcoming", order: "" };
     });
+    due = due.concat((p.programs || []).filter(function (x) { return x.date && (x.required === "yes" || x.kind === "deliverable") && (x.status === "upcoming" || x.status === "todo") && dayFromIso(x.date) >= today; }).map(function (x) {
+      return { id: x.id, title: x.title + (x.time ? ", " + x.time : ""), date: x.date, term: "", category: "admin", status: "upcoming", order: "" };
+    }));
     return p.milestones.filter(function (m) {
       if (m.status === "done") return false;
       if (m.date) return dayFromIso(m.date) >= today;
@@ -747,7 +750,7 @@
         (rest.length ? '<p class="mtg__more">Then ' + rest.map(function (e) { return esc(fmtDay(evStart(e))); }).join(" and ") + ".</p>" : "") + "</div>"
       : '<div class="mtg"><p class="mtg__k">Next 1:1</p><p class="mtg__when">None on your calendar in the next six weeks.</p>' + (notesUrl ? '<p class="mtg__act"><a class="btn btn--sm btn--solid" href="' + esc(notesUrl) + '" target="_blank" rel="noopener">Open the meeting notes' + newTab() + "</a></p>" : "") + "</div>";
     var qHtml = qs.length ? '<div class="mtg"><p class="mtg__k">Open questions for ' + esc(M.whoLabel || "your advisor") + ' in the hub</p><ul class="mtg__qs">' + qs.slice(0, 4).map(function (q) { return "<li>" + esc(q.question) + "</li>"; }).join("") + "</ul>" +
-      (qs.length > 4 ? '<p class="mtg__more"><a href="#pq-h" data-jump="pq-h">' + plural(qs.length - 4, "more") + "</a></p>" : "") + '<p class="mtg__more">Add the ones you want to raise to the meeting notes, which hold your own question list.</p></div>' : "";
+      (qs.length > 4 ? '<p class="mtg__more"><a href="#/phd/people">' + plural(qs.length - 4, "more") + "</a></p>" : "") + '<p class="mtg__more">Add the ones you want to raise to the meeting notes, which hold your own question list.</p></div>' : "";
     var docs = links.length ? '<div class="mtg"><p class="mtg__k">PhD documents</p><ul class="docs">' + links.map(function (l) {
       var u = safeUrl(l.url);
       return "<li>" + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + newTab() + "</a>" : esc(l.label)) + (l.notes ? "<small>" + esc(l.notes) + "</small>" : "") +
@@ -801,8 +804,8 @@
     return { start: s, end: e, pct: pct, year: yr, years: years, left: Math.max(0, dayNumber(e) - dayNumber(now)) };
   }
   function phdMeter() {
-    var t = phdTime(), wk = Math.round(t.left / 7);
-    return meter("prog-phd", "of your time at Berkeley", t.pct, "Year " + t.year + " of " + t.years + ". About " + wk.toLocaleString("en-US") + " weeks to graduation, " + esc(PHDCFG.expected || fmtDay(t.end, true)) + ".", "meter--phd");
+    var t = phdTime(), total = dayNumber(t.end) - dayNumber(t.start) + 1, day = Math.max(0, Math.min(total, dayNumber(new Date()) - dayNumber(t.start) + 1));
+    return meter("prog-phd", "of your time at Berkeley", t.pct, "Day " + day.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + ". " + t.left.toLocaleString("en-US") + " days to graduation (about " + Math.round(t.left / 7) + " weeks), " + esc(PHDCFG.expected || fmtDay(t.end, true)) + ". Year " + t.year + " of " + t.years + ".", "meter--phd");
   }
 
   function isCEE(c) { return /^(CIVENG|CE)\b/i.test(String(c.code || "").trim()); }
@@ -931,11 +934,11 @@
         (c ? '<span class="deslot__c" tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<span class="deslot__t">' + esc(c.title) + "</span>" : "") +
           '<span class="st deslot__st">' + shape(key) + esc(C_STATUS[s2] || s2) + (c.term ? ", " + esc(c.term) : "") + "</span>" +
           (sl.kind.indexOf("Elective") === 0 ? '<span class="deslot__m">' + esc(c.de === "petition" ? "By petition" : modNames[c.de] || "") + "</span>" : "")
-          : '<span class="deslot__c">' + esc(sl.code || "Not picked yet") + '</span><span class="deslot__t">' + (sl.code ? "Not on your plan yet" : "Any course on the DE list. See Options below.") + "</span>") + "</li>";
+          : '<span class="deslot__c">' + esc(sl.code || "Not picked yet") + '</span><span class="deslot__t">' + (sl.code ? "Not on your plan yet" : "Any course on the DE list. See Elective options below.") + "</span>") + "</li>";
     }).join("");
     var steps = (de.steps || []).map(function (stp) {
       var m = stp.milestone ? byId(p.milestones, stp.milestone) : null;
-      var ok = m ? (m.status === "done" ? true : false) : stp.auto === "c200" ? bestStatus(active.filter(function (c) { return c.de === "core" && /C200/i.test(c.code); })) : false;
+      var ok = stp.ok !== undefined ? stp.ok : m ? (m.status === "done" ? true : false) : stp.auto === "c200" ? bestStatus(active.filter(function (c) { return c.de === "core" && /C200/i.test(c.code); })) : false;
       return check(ok, esc(stp.label), esc(stp.note || ""));
     }).join("");
     return '<section class="section" aria-labelledby="de-h"><h2 id="de-h">' + esc(de.label || "Designated Emphasis") + "</h2>" +
@@ -1043,20 +1046,250 @@
       }).join("") + "</div></section>";
   }
 
-  function viewPhd() {
+  /* ---------- the PhD pages: an overview, plus one page per part, linked by a row of tabs ---------- */
+  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Funding and programs"], ["people", "Questions and people"]];
+  function phdTitle(sub) { var m = PHD_PAGES.filter(function (x) { return x[0] === (sub || ""); })[0]; return m ? m[1] : "PhD"; }
+  function phdTabs(sub) {
+    return '<nav class="ptabs" aria-label="PhD pages"><ul>' + PHD_PAGES.map(function (x) {
+      return '<li><a href="#/phd' + (x[0] ? "/" + x[0] : "") + '"' + ((sub || "") === x[0] ? ' aria-current="page"' : "") + ">" + esc(x[1]) + "</a></li>";
+    }).join("") + "</ul></nav>";
+  }
+  function phdHead(sub, intro) {
+    return '<div class="head">' + (sub ? '<a class="crumb" href="#/phd">PhD</a>' : "") + '<h1 tabindex="-1">' + esc(sub ? phdTitle(sub) : "PhD") + "</h1>" + (intro ? "<p>" + intro + "</p>" : "") + "</div>" + phdTabs(sub);
+  }
+  function viewPhd(sub) {
     var p = phd();
     if (!p) return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>Your PhD plan needs the new backend. In the Apps Script editor, paste in the new <code>Code.gs</code>, run <b>setup</b> once, and deploy a new version (steps in the README). Then reload this page.</p></div></div>';
+    var foot = '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p>';
+    var docBtn = function (id, label) { var l = byId(p.links || [], id), u = l ? safeUrl(l.url) : ""; return u ? '<a class="btn btn--sm" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(label) + newTab() + "</a>" : ""; };
+    if (sub === "coursework") return '<div class="wrap">' + phdHead(sub, "Your Program of Study: 30 units across the major, two minors and flexible units, plus the core areas.") +
+      '<div class="toolbar toolbar--tight">' + docBtn("pl-bluecard", "Blue Card form") + docBtn("pl-posform", "Program of Study form") + '<a class="btn btn--sm" href="#/phd/planner">Try a plan in the planner</a></div>' +
+      requirementsHtml() + coursesHtml() + foot + "</div>";
+    if (sub === "de") return '<div class="wrap">' + phdHead(sub, "Development Engineering: five courses and a few steps, separate from your minors.") + deSectionHtml() + deOptionsHtml() + foot + "</div>";
+    if (sub === "planner") return '<div class="wrap">' + phdHead(sub, "Drag courses into semesters, or use each course's menu, and the checks on the right update as you go. Nothing here changes your plan until you save it.") + plannerHtml() + "</div>";
+    if (sub === "timeline") return '<div class="wrap">' + phdHead(sub, "Year by year, from your research plan and emails.") + timelineHtml() + foot + "</div>";
+    if (sub === "funding") return '<div class="wrap">' + phdHead(sub, "Fellowship applications and the programs you're part of.") + fellowshipsHtml() + programsHtml() + foot + "</div>";
+    if (sub === "people") return '<div class="wrap">' + phdHead(sub, "What to ask, who to ask, and your PhD documents.") + questionsHtml() + contactsHtml() + docsHtml() + foot + "</div>";
+    if (sub) return notFound("That PhD page doesn't exist.");
     var next = phdNext(), nowT = termNow(), first = PHDCFG.firstYear || 2026, yr = Math.floor((nowT - (first * 3 + 2)) / 3) + 1;
     var openQ = p.questions.filter(function (q) { return q.status !== "answered"; }).length;
-    var nextHtml = next.length ? '<ul class="nexts">' + next.slice(0, 5).map(function (m) {
+    var nextHtml = next.length ? '<ul class="nexts">' + next.slice(0, 6).map(function (m) {
       return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span class=\"nexts__t\" tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
     }).join("") + "</ul>" : '<p class="empty">Nothing coming up on the timeline.</p>';
-    return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>' + esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".</p></div>" +
-      '<div class="phdbar">' + phdMeter() + deMeter() + "</div>" +
+    return '<div class="wrap">' + phdHead("", esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".") +
+      '<div class="phdbar">' + phdMeter() + "</div>" +
       '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Coming up</h2>' + nextHtml +
-      (openQ ? '<p class="section__note"><a href="#pq-h" data-jump="pq-h">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
-      meetingsHtml() + fellowshipsHtml() + requirementsHtml() + deSectionHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
-      '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p></div>';
+      (openQ ? '<p class="section__note"><a href="#/phd/people">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
+      meetingsHtml() + phdCards() + foot + "</div>";
+  }
+  /* One card per PhD page, each with the one number that matters there. */
+  function phdCards() {
+    var p = phd(), parts = { done: 0, doing: 0, planned: 0 }, need = RULES.total || 30;
+    (RULES.fields || []).forEach(function (f) { var s = fieldStats(f.key); parts.done += s.done; parts.doing += s.doing; parts.planned += s.planned; });
+    var placed = parts.done + parts.doing + parts.planned, st = deState();
+    var fel = fellows().filter(function (f) { var n = fDays(f); return F_OPEN[f.status] && n >= 0 && n <= 31; });
+    var openQ = p.questions.filter(function (q) { return q.status !== "answered"; }).length;
+    var nextExam = p.milestones.filter(function (m) { return m.category === "exam" && m.status !== "done"; }).sort(mSort)[0];
+    var prog = (p.programs || []).filter(function (x) { return x.kind === "about"; })[0];
+    var card = function (href, title, big, small) { return '<li><a class="pcard" href="#/phd/' + href + '"><span class="pcard__t">' + esc(title) + '</span><span class="pcard__big">' + big + '</span><span class="pcard__s">' + small + "</span></a></li>"; };
+    return '<section class="section" aria-labelledby="pc2-h"><h2 id="pc2-h">Your PhD, part by part</h2><ul class="pcards">' +
+      card("coursework", "Coursework", esc(placed + " of " + need), esc(parts.done + " units done, " + parts.doing + " in progress, " + parts.planned + " planned")) +
+      card("de", "Designated Emphasis", esc(st.n.done + " of " + st.total + " courses done"), esc(st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : ""))) +
+      card("planner", "Planner", "Try a semester", "Drag courses in and check them against your requirements") +
+      card("timeline", "Timeline", nextExam ? esc(nextExam.title) : "Five years", nextExam ? esc(mDateText(nextExam)) : "By year and term") +
+      card("funding", "Funding and programs", esc(plural(fel.length, "deadline")) + " this month", prog ? esc(prog.program) + " and fellowship applications" : "Fellowship applications") +
+      card("people", "Questions and people", esc(plural(openQ, "open question")), "Contacts and PhD documents") + "</ul></section>";
+  }
+  function docsHtml() {
+    var links = (phd().links || []).slice().sort(byOrder);
+    return '<section class="section" aria-labelledby="dc2-h"><div class="h-row"><h2 id="dc2-h">PhD documents</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="links">Add a document</button></div><ul class="docs docs--page">' + links.map(function (l) {
+      var u = safeUrl(l.url);
+      return "<li>" + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + newTab() + "</a>" : esc(l.label)) + (l.notes ? "<small>" + esc(l.notes) + "</small>" : "") +
+        ' <button type="button" class="linkbtn docs__edit" data-act="edit-phd" data-kind="links" data-id="' + esc(l.id) + '">Edit<span class="sr"> ' + esc(l.label) + "</span></button></li>";
+    }).join("") + "</ul></section>";
+  }
+  /* Course ideas that would count for the DE, so the DE page has its own menu. */
+  function deOptionsHtml() {
+    var p = phd(), mods = (RULES.de || {}).modules || {};
+    var list = p.courses.filter(function (c) { return c.status === "idea" && c.de && c.de !== "core"; }).sort(byOrder);
+    if (!list.length) return "";
+    return '<section class="section" aria-labelledby="deo-h"><h2 id="deo-h">Elective options</h2><ul class="opts">' + list.map(function (c) {
+      return '<li><p class="opt__t"><b tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</b> " + esc(c.title || "") + ' <span class="opt__u">' + esc(c.de === "petition" ? "By petition" : mods[c.de] || c.de) + "</span></p>" +
+        (c.schedule ? '<p class="opt__n">' + esc(c.term ? c.term + ", " : "") + esc(c.schedule) + "</p>" : "") + (c.notes ? '<p class="opt__n">' + esc(c.notes) + "</p>" : "") +
+        '<button type="button" class="linkbtn" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></li>";
+    }).join("") + "</ul></section>";
+  }
+
+  /* ---------- programs you're part of (Path to the Professoriate): sessions, deliverables and what earns the stipend ---------- */
+  var P_STATUS = { upcoming: "Coming up", past: "Did you go?", attended: "Attended", missed: "Missed", todo: "To do", submitted: "Submitted" };
+  var P_SHAPE = { upcoming: "todo", past: "soon", attended: "done", missed: "late", todo: "todo", submitted: "done" };
+  function programsHtml() {
+    var p = phd(), all = (p.programs || []).slice().sort(byOrder), names = [];
+    all.forEach(function (x) { if (names.indexOf(x.program) < 0) names.push(x.program); });
+    return names.map(function (name, i) {
+      var items = all.filter(function (x) { return x.program === name; }), about = items.filter(function (x) { return x.kind === "about"; })[0];
+      var sessions = items.filter(function (x) { return x.kind === "session"; }), need = about ? Number(about.required) || 0 : 0;
+      var went = sessions.filter(function (x) { return x.status === "attended"; }).length, unsure = sessions.filter(function (x) { return x.status === "past"; }).length;
+      var reqMissed = sessions.filter(function (x) { return x.required === "yes" && x.status === "missed"; });
+      var deliver = items.filter(function (x) { return x.kind === "deliverable"; });
+      var bar = need ? '<div class="debar debar--big" role="img" aria-label="' + esc(went + " of " + need + " sessions attended") + '">' + Array.apply(null, Array(Math.max(need, sessions.length))).map(function (_, k) {
+          return '<i class="debar__slot ' + (k < went ? "ubar__done" : k < need ? "is-open" : "is-extra") + '"></i>'; }).join("") + "</div>" : "";
+      var rows = items.filter(function (x) { return x.kind !== "about"; }).map(function (x) {
+        var link = safeUrl(x.link);
+        return '<tr class="' + (x.status === "attended" || x.status === "submitted" ? "is-muted" : "") + '"><td class="who">' + (x.date ? '<b class="nowrap">' + esc(fmtDay(noonOf(dayFromIso(x.date)))) + "</b>" : "") + (x.time ? "<small>" + esc(x.time) + "</small>" : "") + "</td>" +
+          '<td class="t">' + esc(x.title) + (x.required === "yes" ? ' <span class="opt__u">Required</span>' : "") + (x.notes ? "<small>" + esc(x.notes) + "</small>" : "") + (link ? '<small><a href="' + esc(link) + '" target="_blank" rel="noopener">' + (/zoom/.test(link) ? "Zoom link" : "Link") + newTab() + "</a></small>" : "") + "</td>" +
+          '<td><span class="st">' + shape(P_SHAPE[x.status] || "todo") + esc(P_STATUS[x.status] || x.status || "") + "</span></td>" +
+          '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="programs" data-id="' + esc(x.id) + '">' + (x.status === "past" ? "Mark it" : "Edit") + '<span class="sr"> ' + esc(x.title) + "</span></button></td></tr>";
+      }).join("");
+      var summary = need ? "<b>" + went + " of " + need + "</b> sessions attended" + (unsure ? ", " + plural(unsure, "past session") + " to mark" : "") + ". " +
+        (reqMissed.length ? '<span class="ureq__gap">Missed a required session.</span> ' : "") +
+        deliver.map(function (d) { return esc(d.title.replace(/^Deliverable:\s*/i, "")) + ": " + esc((P_STATUS[d.status] || d.status).toLowerCase()) + (d.date ? ", due " + esc(fmtDay(noonOf(dayFromIso(d.date)))) : ""); }).join(". ") + "." : "";
+      return '<section class="section" aria-labelledby="pg' + i + '-h"><div class="h-row"><h2 id="pg' + i + '-h">' + esc(name) + '</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="programs" data-program="' + esc(name) + '">Add a date</button></div>' +
+        (about ? '<div class="ureq ureq--total"><div class="ureq__head"><h3>' + esc(about.title) + "</h3>" + (safeUrl(about.link) ? '<p class="ureq__note"><a href="' + esc(safeUrl(about.link)) + '" target="_blank" rel="noopener">Program page' + newTab() + "</a></p>" : "") + "</div>" +
+          (about.notes ? '<p class="ureq__note">' + esc(about.notes) + "</p>" : "") + bar + '<p class="ureq__sum">' + summary + "</p></div>" : "") +
+        '<table class="pm-table ftbl"><caption class="sr">' + esc(name) + ' dates</caption><thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Status</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' + rows + "</tbody></table></section>";
+    }).join("");
+  }
+
+  /* ---------- the coursework planner: a sandbox on this device, checked live against your requirements ---------- */
+  function simLoad() { try { var s = JSON.parse(store.get("plan") || "{}"); s.place = s.place || {}; s.custom = s.custom || []; return s; } catch (e) { return { place: {}, custom: [] }; } }
+  function simSave(s) { store.set("plan", JSON.stringify(s)); }
+  function planTerms() {
+    var first = (PHDCFG.firstYear || 2026) * 3 + 2, until = termKey(PHDCFG.plannerUntil || "Spring 2028"), out = [];
+    for (var k = first; k <= until; k++) if (k % 3 !== 1) out.push(termName(k));   // fall and spring; summer left out
+    return out;
+  }
+  function locked(c) { return c.status === "done" || c.status === "in-progress"; }
+  function simCourses() {
+    var p = phd(), s = simLoad(), terms = planTerms();
+    var base = p.courses.filter(function (c) { return c.status !== "dropped"; }).concat(s.custom.map(function (c) { return Object.assign({ status: "idea", custom: true }, c); }));
+    return base.map(function (c) {
+      var x = Object.assign({}, c), where;
+      if (c.status === "done") where = "done";
+      else if (locked(c)) where = c.term;
+      else if (Object.prototype.hasOwnProperty.call(s.place, c.id)) where = s.place[c.id];
+      else where = c.status === "planned" && terms.indexOf(c.term) > -1 ? c.term : "";
+      x.where = where;
+      if (!locked(c)) { x.status = where ? "planned" : "idea"; x.term = where || c.term; }
+      return x;
+    });
+  }
+  /* "TuTh 9:30 AM-10:59 AM" into days and minutes; anything without a time (Online) never clashes. */
+  function parseSched(s) {
+    s = String(s || ""); var days = (s.split(/\d/)[0].match(/Mo|Tu|We|Th|Fr|Sa|Su/g) || []);
+    var t = [], re = /(\d{1,2}):(\d{2})\s*(AM|PM)?/gi, m;
+    while ((m = re.exec(s)) && t.length < 2) t.push([+m[1], +m[2], (m[3] || "").toUpperCase()]);
+    if (!days.length || t.length < 2) return null;
+    var ap2 = t[1][2] || "PM", ap1 = t[0][2] || (t[0][0] > t[1][0] && t[1][0] !== 12 ? "AM" : ap2);
+    var toMin = function (x, ap) { var h = x[0] % 12 + (ap === "PM" ? 12 : 0); return h * 60 + x[1]; };
+    return { days: days, start: toMin(t[0], ap1), end: toMin(t[1], ap2) };
+  }
+  function clashes(list) {
+    var out = {};
+    list.forEach(function (a, i) {
+      var pa = parseSched(a.schedule); if (!pa) return;
+      list.slice(i + 1).forEach(function (b) {
+        var pb = parseSched(b.schedule); if (!pb) return;
+        var day = pa.days.some(function (d) { return pb.days.indexOf(d) > -1; });
+        if (day && pa.start < pb.end && pb.start < pa.end) { (out[a.id] = out[a.id] || []).push(b.code); (out[b.id] = out[b.id] || []).push(a.code); }
+      });
+    });
+    return out;
+  }
+  function planCard(c, terms, clash) {
+    var lock = locked(c), mods = (RULES.de || {}).modules || {};
+    var fieldName = {}; (RULES.fields || []).forEach(function (f) { fieldName[f.key] = f.label; });
+    var tags = [fieldName[c.field], c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "", c.field === "none" ? "Not in the 30" : ""].filter(Boolean);
+    var opts = '<option value="">Not planned</option>' + terms.map(function (t) { return '<option value="' + esc(t) + '"' + (c.where === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("");
+    return '<li class="pcrd' + (lock ? " is-locked" : "") + (clash ? " has-clash" : "") + (c.custom ? " is-custom" : "") + '"' + (lock ? "" : ' draggable="true" data-plan-id="' + esc(c.id) + '"') + ">" +
+      '<p class="pcrd__t"><b>' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
+      (c.title ? '<p class="pcrd__n">' + esc(c.title) + "</p>" : "") +
+      (c.schedule ? '<p class="pcrd__s">' + esc(c.schedule) + "</p>" : "") +
+      (tags.length ? '<p class="pcrd__tags">' + tags.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") + "</p>" : "") +
+      (clash ? '<p class="pcrd__clash"><span class="st">' + shape("late") + "Clashes with " + esc(clash.join(", ")) + "</span></p>" : "") +
+      (lock ? '<p class="pcrd__lock">' + esc(C_STATUS[c.status]) + (c.status === "done" ? "" : ", " + esc(c.term)) + "</p>"
+        : '<p class="pcrd__move"><label class="sr" for="mv-' + esc(c.id) + '">Move ' + esc(c.code) + ' to</label><select id="mv-' + esc(c.id) + '" data-plan-move="' + esc(c.id) + '">' + opts + "</select>" +
+          (c.custom ? ' <button type="button" class="linkbtn" data-act="plan-keep" data-id="' + esc(c.id) + '">Save to my courses</button> <button type="button" class="linkbtn" data-act="plan-drop" data-id="' + esc(c.id) + '">Remove</button>' : "") + "</p>") + "</li>";
+  }
+  function plannerChecks(list) {
+    var p = phd(), real = p.courses, out = "";
+    p.courses = list.filter(function (c) { return c.where !== undefined; });
+    try {
+      var fields = RULES.fields || [], need = RULES.total || 30, tot = { done: 0, doing: 0, planned: 0 };
+      var fieldChecks = fields.map(function (f) {
+        var s = fieldStats(f.key); tot.done += s.done; tot.doing += s.doing; tot.planned += s.planned;
+        return check(s.sum >= f.min ? (s.done >= f.min ? true : "doing") : false, "<b>" + esc(f.label) + "</b>: " + s.sum + " of " + f.min + " units", s.sum >= f.min ? "" : fmtUnits(f.min - s.sum) + " short.");
+      }).join("");
+      tot.sum = tot.done + tot.doing + tot.planned;
+      var coreChecks = (RULES.core || []).map(function (a) {
+        var hit = p.courses.filter(function (c) { return c.core === a.key && counted(c); });
+        return check(hit.length ? bestStatus(hit) || "doing" : false, "<b>" + esc(a.label) + "</b>" + (hit.length ? ": " + esc(hit.map(function (c) { return c.code; }).join(", ")) : ""), hit.length ? "" : "No course yet.");
+      }).join("");
+      var st = deState(), de = RULES.de || {}, el = st.electives, mods = {};
+      el.forEach(function (c) { if (c.de !== "petition") mods[c.de] = true; });
+      var home = el.filter(isCEE), both = st.active.filter(function (c) { return c.de && /^minor/.test(c.field); });
+      var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
+        check(Object.keys(mods).length >= (de.minModules || 2) ? true : false, "Electives from " + (de.minModules || 2) + " modules", "") +
+        check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " CEE elective", home.length > (de.maxHome || 1) ? esc(home.map(function (c) { return c.code; }).join(", ")) : "") +
+        (de.separateFromMinors ? check(both.length ? "warn" : true, "DE kept out of the minors", both.length ? esc(both.map(function (c) { return c.code; }).join(", ")) : "") : "");
+      out = '<h3 class="rq__h">' + need + " units of coursework</h3>" + unitBar(tot, need, "All coursework") + '<p class="ureq__sum">' + unitText(tot, need) + "</p>" +
+        '<ul class="rqs rqs--tight">' + fieldChecks + '</ul><h3 class="rq__h">Core areas</h3><ul class="rqs rqs--tight">' + coreChecks + "</ul>" +
+        '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>";
+    } finally { p.courses = real; }
+    return out;
+  }
+  function plannerHtml() {
+    var terms = planTerms(), list = simCourses(), minUnits = PHDCFG.fullTime || 12;
+    var cols = terms.map(function (t) {
+      var here = list.filter(function (c) { return c.where === t; }).sort(byOrder), u = here.reduce(function (n, c) { return n + units(c); }, 0), cl = clashes(here);
+      return '<section class="pcol" data-plan-term="' + esc(t) + '" aria-labelledby="pt-' + esc(t.replace(/\s/g, "")) + '"><div class="pcol__head"><h3 id="pt-' + esc(t.replace(/\s/g, "")) + '">' + esc(t) + "</h3>" +
+        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b>" + (u >= minUnits ? "" : ' <span class="ureq__gap">' + (minUnits - u) + " short of full time</span>") + (Object.keys(cl).length ? ' <span class="ureq__gap">Time clash</span>' : "") + "</p></div>" +
+        '<ul class="pcol__list">' + here.map(function (c) { return planCard(c, terms, cl[c.id]); }).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
+    }).join("");
+    var pool = list.filter(function (c) { return !c.where; }).sort(function (a, b) { return (a.custom ? -1 : 0) - (b.custom ? -1 : 0) || byOrder(a, b); });
+    var done = list.filter(function (c) { return c.where === "done"; });
+    var fieldOpts = [["", "Not placed"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["de", "Only the DE"], ["none", "Not in the 30"]]);
+    var coreOpts = [["", "No core area"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; }));
+    var mods = (RULES.de || {}).modules || {}, deOpts = [["", "Not for the DE"]].concat(Object.keys(mods).map(function (k) { return [k, "DE elective, " + mods[k]]; })).concat([["core", "DE core"]]);
+    var sel = function (name, opts) { return '<select id="pa-' + name + '" name="' + name + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + "</option>"; }).join("") + "</select>"; };
+    var form = '<form class="padd" id="plan-add"><h3 class="rq__h">Add a course</h3>' +
+      '<div class="two"><div class="field"><label for="pa-code">Course</label><input id="pa-code" name="code" required placeholder="CYPLAN 204C"></div><div class="field"><label for="pa-units">Units</label><input id="pa-units" name="units" inputmode="decimal" value="3"></div></div>' +
+      '<div class="field"><label for="pa-schedule">Schedule</label><input id="pa-schedule" name="schedule" placeholder="TuTh 9:30 AM-10:59 AM"><small>Days, then times. Leave it empty or write Online for no clash check.</small></div>' +
+      '<div class="field"><label for="pa-field">Counts toward</label>' + sel("field", fieldOpts) + "</div>" +
+      '<div class="two"><div class="field"><label for="pa-core">Core area</label>' + sel("core", coreOpts) + '</div><div class="field"><label for="pa-de">Designated Emphasis</label>' + sel("de", deOpts) + "</div></div>" +
+      '<button type="submit" class="btn btn--sm btn--solid">Add to the list</button></form>';
+    var s = simLoad(), changed = Object.keys(s.place).length + s.custom.length;
+    return '<div class="ptools"><button type="button" class="btn btn--sm btn--solid" data-act="plan-save"' + (changed ? "" : " disabled") + ">Save this plan to my courses</button>" +
+      '<button type="button" class="btn btn--sm" data-act="plan-reset"' + (changed ? "" : " disabled") + ">Start over from my courses</button>" +
+      '<p class="toolbar__note">' + (changed ? plural(changed, "change") + " not saved yet. Kept on this device." : "Matches your saved courses.") + "</p></div>" +
+      '<div class="planner"><div class="planner__main"><div class="pcols">' + cols + "</div>" +
+      '<section class="pcol pcol--pool" data-plan-term="" aria-labelledby="pp2-h"><div class="pcol__head"><h3 id="pp2-h">Not planned</h3><p class="pcol__u">' + plural(pool.length, "course") + ' to choose from. Drag one into a semester.</p></div><ul class="pcol__list pcol__list--pool">' +
+        pool.map(function (c) { return planCard(c, terms, null); }).join("") + "</ul></section>" +
+      (done.length ? '<details class="done-list"><summary>Done already (' + done.length + ")</summary><ul class=\"pcol__list pcol__list--pool\">" + done.map(function (c) { return planCard(c, terms, null); }).join("") + "</ul></details>" : "") +
+      '</div><aside class="planner__side" aria-labelledby="pck-h"><h2 id="pck-h">With this plan</h2>' + plannerChecks(list) + form + "</aside></div>";
+  }
+  function planMove(id, term) { var s = simLoad(); s.place[id] = term; simSave(s); refresh(); }
+  function planSaveAll() {
+    var s = simLoad(), p = phd(), terms = planTerms(), changes = [];
+    simCourses().forEach(function (c) {
+      if (c.custom || locked(c)) return;
+      var real = byId(p.courses, c.id); if (!real) return;
+      if (c.where && (real.status !== "planned" || real.term !== c.where)) changes.push([real, { status: "planned", term: c.where }]);
+      if (!c.where && real.status === "planned" && terms.indexOf(real.term) > -1) changes.push([real, { status: "idea" }]);
+    });
+    var adds = s.custom.length;
+    openDialog('<form method="dialog">' + dlgHead("Save this plan?") + '<div class="dlg__body"><p>' + (changes.length ? plural(changes.length, "course") + " will change term or status in your Sheet" : "No saved course changes") +
+      (adds ? ", and " + plural(adds, "added course") + " will be added as planned" : "") + ".</p></div>" +
+      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep editing</button><button type="submit" class="btn btn--solid">Save the plan</button></div></form>', function () {
+      var jobs = changes.map(function (ch) { return { kind: "courses", row: Object.assign({}, ch[0], ch[1]) }; })
+        .concat(s.custom.map(function (c) { var r = Object.assign({}, c); delete r.custom; delete r.where; r.id = ""; r.status = s.place[c.id] ? "planned" : "idea"; r.term = s.place[c.id] || ""; r.school = r.school || "UC Berkeley"; return { kind: "courses", row: r }; }));
+      return jobs.reduce(function (pr, j) {
+        return pr.then(function () { return apiPost({ action: "saveRecord", kind: j.kind, row: j.row }, "Saving the plan").then(function (r) {
+          var saved = r.row || Object.assign(j.row, { id: j.row.id || newId("pc") }), list = p.courses, i = list.findIndex(function (x) { return x.id === saved.id; });
+          if (i > -1) list[i] = saved; else list.push(saved);
+        }); });
+      }, Promise.resolve()).then(function () { simSave({ place: {}, custom: [] }); refresh(); toast("Plan saved" + (state.demo ? " (demo, not saved)" : "")); });
+    });
   }
 
   /* The side column on This week: the next step or two, nothing more. */
@@ -1090,6 +1323,13 @@
       ["answer", "What you know so far", "textarea"], ["asked", "Asked on", "date", { half: 1 }], ["link", "Link to the email", "url", { half: 2 }]] },
     contacts: { title: ["Add a person", "Edit person"], what: "person", fields: [
       ["name", "Name", "text", { required: true }], ["role", "Role", "text"], ["email", "Email", "email", { half: 1 }], ["group", "Group", "text", { half: 2, hint: "For example CEE or DevEng." }]] },
+    programs: { title: ["Add a date", "Edit"], what: "date", fields: [
+      ["title", "What", "text", { required: true }], ["program", "Program", "text"],
+      ["date", "Date", "date", { half: 1 }], ["time", "Time", "text", { half: 2 }],
+      ["kind", "Kind", "select", { half: 1, opts: function () { return [["session", "Session"], ["event", "Other event"], ["deliverable", "Deliverable"], ["about", "Program rules"]]; } }],
+      ["status", "Status", "select", { half: 2, opts: function () { return [["upcoming", "Coming up"], ["past", "Past, not marked"], ["attended", "Attended"], ["missed", "Missed"], ["todo", "To do"], ["submitted", "Submitted"], ["", "None"]]; } }],
+      ["required", "Required?", "text", { hint: "yes for a required session; for program rules, how many sessions you need." }],
+      ["link", "Link", "url"], ["notes", "Notes", "textarea"]] },
     links: { title: ["Add a document", "Edit document"], what: "document", fields: [
       ["label", "Name", "text", { required: true }], ["url", "Link", "url", { required: true }], ["notes", "Note", "text"]] },
     fellowships: { title: ["Add a fellowship", "Edit fellowship"], what: "fellowship", fields: [
@@ -1106,8 +1346,8 @@
       ["place", "Where", "text", { half: 1, hint: "A room, or Zoom." }], ["link", "Link", "url", { half: 2, hint: "Zoom or sign-up link." }],
       ["how", "How to join", "textarea"], ["notes", "Notes", "textarea"], ["source", "Where this came from", "url"]] }
   };
-  function phdForm(kind, row) {
-    var F = PHD_FORMS[kind], editing = !!row; row = row || {};
+  function phdForm(kind, row, prefill) {
+    var F = PHD_FORMS[kind], editing = !!row; row = row || prefill || {};
     var html = "", pending = null;
     F.fields.forEach(function (f) {
       var name = f[0], label = f[1], type = f[2], o = f[3] || {}, id = "ph-" + name, v = row[name] || "", ctl;
@@ -1127,7 +1367,7 @@
     var row = Object.assign({}, existing || {}, v);
     if (!existing) row.id = "";
     return apiPost({ action: "saveRecord", kind: kind, row: row }).then(function (r) {
-      var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh", fellowships: "pf", links: "pl" }[kind]) });
+      var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh", fellowships: "pf", links: "pl", programs: "pg" }[kind]) });
       var list = recList(kind), i = list.findIndex(function (x) { return x.id === saved.id; });
       if (i > -1) list[i] = saved; else list.push(saved);
       refresh(); toast((existing ? "Saved" : "Added") + (r.demo ? " (demo, not saved)" : ""));
@@ -1146,6 +1386,9 @@
   }
   function phdPeek(id) {
     var p = phd(); if (!p) return "";
+    var pg = byId(p.programs || [], id);
+    if (pg) return '<p class="peek__meta"><span>' + esc(pg.program) + '</span>' + (pg.required === "yes" ? "<span>Required</span>" : "") + '</p><p class="peek__title">' + esc(pg.title) + "</p>" +
+      '<p class="peek__when">' + (pg.date ? esc(fmtLongDay(noonOf(dayFromIso(pg.date)))) : "") + (pg.time ? ", " + esc(pg.time) : "") + "</p>" + (pg.notes ? '<p class="peek__body">' + esc(pg.notes) + "</p>" : "");
     var f = byId(fellows(), id);
     if (f) return '<p class="peek__meta"><span class="st">' + shape(F_SHAPE[f.status] || "todo") + esc(F_STATUS[f.status] || "") + "</span>" + (f.amount ? "<span>" + esc(f.amount) + "</span>" : "") + '</p><p class="peek__title">' + esc(f.name) + "</p>" +
       '<p class="peek__when">' + (f.deadline ? esc(fmtLongDay(noonOf(dayFromIso(f.deadline)))) + (fTime(f) ? ", " + esc(fTime(f)) : "") + ". " + esc(fRel(f)) : esc(f.time || "No date yet")) + "</p>" +
@@ -1399,7 +1642,7 @@
     else if (view === "d") { html = viewDay(h[1]); var dd = dayFromIso(h[1]); if (!isNaN(dd)) title = fmtLongDay(noonOf(dd)); }
     else if (view === "news") { html = viewNews(); title = "Announcements"; }
     else if (view === "about") { html = viewAbout(); title = "About and settings"; }
-    else if (view === "phd") { html = viewPhd(); title = "PhD"; }
+    else if (view === "phd") { html = viewPhd(h[1] || ""); title = h[1] ? phdTitle(h[1]) + " | PhD" : "PhD"; }
     else if (view === "hours") { html = viewOfficeHours(); title = "Office hours"; }
     else { html = viewHome(); }
     hidePeek(true);
@@ -1556,6 +1799,7 @@
       store.set("f.show", document.getElementById("f-show").value);
       refresh(); var again = document.getElementById(t.id); if (again) again.focus();
     }
+    if (t.hasAttribute && t.hasAttribute("data-plan-move")) { var pid = t.getAttribute("data-plan-move"); planMove(pid, t.value); var again2 = document.getElementById("mv-" + pid); if (again2) again2.focus(); return; }
     if (t.id === "show-events") { store.set("showEvents", t.checked ? "1" : "0"); refresh(); var se = document.getElementById("show-events"); if (se) se.focus(); }
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
   });
@@ -1592,7 +1836,18 @@
     }
     if (act === "save-calendars") saveCalendars(b);
     if (act === "mark-all-read") markAllRead();
-    if (act === "new-phd") { var k0 = b.getAttribute("data-kind"); openDialog(phdForm(k0, null), function (v) { return savePhd(k0, null, v); }); }
+    if (act === "new-phd") { var k0 = b.getAttribute("data-kind"), pre = b.getAttribute("data-program") ? { program: b.getAttribute("data-program"), kind: "session", status: "upcoming" } : null; openDialog(phdForm(k0, null, pre), function (v) { return savePhd(k0, null, v); }); }
+    if (act === "plan-save") planSaveAll();
+    if (act === "plan-reset") { simSave({ place: {}, custom: [] }); refresh(); toast("Back to your saved courses"); }
+    if (act === "plan-drop") { var s0 = simLoad(); s0.custom = s0.custom.filter(function (x) { return x.id !== id; }); delete s0.place[id]; simSave(s0); refresh(); }
+    if (act === "plan-keep") {
+      var s1 = simLoad(), cx = byId(s1.custom, id); if (!cx) return;
+      var row = Object.assign({}, cx, { id: "", status: s1.place[id] ? "planned" : "idea", term: s1.place[id] || "", school: "UC Berkeley" });
+      apiPost({ action: "saveRecord", kind: "courses", row: row }).then(function (r) {
+        state.data.phd.courses.push(r.row || Object.assign(row, { id: newId("pc") }));
+        s1.custom = s1.custom.filter(function (x) { return x.id !== id; }); delete s1.place[id]; simSave(s1); refresh(); toast("Added to your courses" + (r.demo ? " (demo, not saved)" : ""));
+      }).catch(function (e) { toast("Not saved: " + e.message); });
+    }
     if (act === "edit-phd") { var k1 = b.getAttribute("data-kind"), row1 = byId(recList(k1), id); if (row1) openDialog(phdForm(k1, row1), function (v) { return savePhd(k1, row1, v); }); }
     if (act === "delete-phd") { ev.preventDefault(); var d2 = b.closest("dialog"); if (d2) d2.close(); confirmDeletePhd(b.getAttribute("data-kind"), id); }
     if (act === "cal-prev" || act === "cal-next" || act === "cal-today") {
@@ -1611,11 +1866,35 @@
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "all-filter" || ev.target.id === "news-filter") { ev.preventDefault(); return; }
     if (ev.target.id === "token-form") { ev.preventDefault(); saveToken(ev.target); return; }
+    if (ev.target.id === "plan-add") {
+      ev.preventDefault();
+      var fd = new FormData(ev.target), c = { id: "sim-" + Math.random().toString(36).slice(2, 8) };
+      fd.forEach(function (v, k) { c[k] = String(v).trim(); });
+      if (!c.code) return;
+      if (c.units && !/^\d{1,2}(\.\d)?$/.test(c.units)) { toast("Units should be a number, like 3"); return; }
+      var s2 = simLoad(); s2.custom.push(c); simSave(s2); refresh(); toast("Added " + c.code + " to Not planned");
+      return;
+    }
     if (ev.target.id === "team-form") { ev.preventDefault(); saveTeamCode(ev.target); return; }
     if (ev.target.id !== "gate") return;
     ev.preventDefault();
     store.set("code", document.getElementById("code").value.trim());
     start();
+  });
+  /* Planner drag and drop. Every card also has a Move to menu, so the keyboard and screen readers don't need dragging. */
+  document.addEventListener("dragstart", function (ev) {
+    var c = ev.target.closest && ev.target.closest("[data-plan-id]"); if (!c) return;
+    ev.dataTransfer.setData("text/plain", c.getAttribute("data-plan-id")); ev.dataTransfer.effectAllowed = "move"; c.classList.add("is-dragging");
+  });
+  document.addEventListener("dragend", function (ev) { var c = ev.target.closest && ev.target.closest("[data-plan-id]"); if (c) c.classList.remove("is-dragging"); document.querySelectorAll(".pcol.is-over").forEach(function (x) { x.classList.remove("is-over"); }); });
+  document.addEventListener("dragover", function (ev) {
+    var col = ev.target.closest && ev.target.closest("[data-plan-term]"); if (!col) return;
+    ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
+    document.querySelectorAll(".pcol.is-over").forEach(function (x) { if (x !== col) x.classList.remove("is-over"); }); col.classList.add("is-over");
+  });
+  document.addEventListener("drop", function (ev) {
+    var col = ev.target.closest && ev.target.closest("[data-plan-term]"); if (!col) return;
+    ev.preventDefault(); var id = ev.dataTransfer.getData("text/plain"); if (id) planMove(id, col.getAttribute("data-plan-term"));
   });
   window.addEventListener("hashchange", route);
 
@@ -1785,7 +2064,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007041657";
+  var BUILD = "20261007050003";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
