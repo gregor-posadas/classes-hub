@@ -14,6 +14,8 @@ window.CH_CONFIG = {
   phd: {
     program: "CEE PhD in Environmental Engineering, with the Development Engineering Designated Emphasis",
     firstYear: 2026,   // Year 1 starts in Fall of this year
+    start: "2026-08-26",   // for the "time at Berkeley" bar
+    end: "2031-05-15",     // about the end of Spring 2031; move it if your plan changes
     years: 5,
     expected: "Spring 2031",
     rules: {

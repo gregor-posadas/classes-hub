@@ -671,7 +671,7 @@
     "core": "",
     "de": "",
     "approval": "",
-    "notes": "",
+    "notes": "Spring: MoWe 9:30 to 10:59 AM.",
     "order": "10"
    },
    {
@@ -703,6 +703,36 @@
     "approval": "",
     "notes": "",
     "order": "12"
+   },
+   {
+    "id": "pc-13",
+    "code": "SAMPLE 204",
+    "title": "Intro to GIS (sample)",
+    "school": "UC Berkeley",
+    "term": "Spring 2027",
+    "units": "4",
+    "status": "idea",
+    "field": "minor-a",
+    "core": "",
+    "de": "",
+    "approval": "",
+    "notes": "Spring: TuTh 9:00 to 10:59 AM.",
+    "order": "13"
+   },
+   {
+    "id": "pc-14",
+    "code": "SAMPLE 215",
+    "title": "User research (sample)",
+    "school": "UC Berkeley",
+    "term": "Spring 2027",
+    "units": "3",
+    "status": "idea",
+    "field": "de",
+    "core": "",
+    "de": "m1",
+    "approval": "",
+    "notes": "Thursdays 2:00 to 4:59 PM.",
+    "order": "14"
    }
   ],
   "milestones": [
@@ -867,6 +897,64 @@
     "role": "Designated Emphasis",
     "email": "",
     "group": "DE"
+   }
+  ],
+  "fellowships": [
+   {
+    "id": "pf-1",
+    "name": "National fellowship (sample)",
+    "sponsor": "A foundation",
+    "status": "in-progress",
+    "deadline": "2026-10-29",
+    "time": "2:00 PM ET",
+    "dates": "Letters due the same day.",
+    "amount": "Up to $90,000",
+    "link": "",
+    "todo": "Submit; remind recommenders a week before.",
+    "notes": "",
+    "order": "1"
+   },
+   {
+    "id": "pf-2",
+    "name": "Research fellowship (sample)",
+    "sponsor": "A federal agency",
+    "status": "to-start",
+    "deadline": "2026-10-30",
+    "time": "5:00 PM ET",
+    "dates": "",
+    "amount": "",
+    "link": "",
+    "todo": "Start the application.",
+    "notes": "",
+    "order": "2"
+   },
+   {
+    "id": "pf-3",
+    "name": "Study-abroad grant (sample)",
+    "sponsor": "",
+    "status": "submitted",
+    "deadline": "2026-10-06",
+    "time": "5:00 PM ET",
+    "dates": "Campus interview in September.",
+    "amount": "",
+    "link": "",
+    "todo": "",
+    "notes": "",
+    "order": "3"
+   },
+   {
+    "id": "pf-4",
+    "name": "Dissertation fellowship (sample)",
+    "sponsor": "",
+    "status": "planned",
+    "deadline": "",
+    "time": "2028 cycle",
+    "dates": "Needs a passed qualifying exam.",
+    "amount": "",
+    "link": "",
+    "todo": "",
+    "notes": "",
+    "order": "4"
    }
   ]
  },

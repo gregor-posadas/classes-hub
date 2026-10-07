@@ -13,7 +13,7 @@
  *  - Emails you at 8 AM, only on days with something to say.
  *  - Shows the events on your Google calendars next to your work (read only).
  *  - Brings in your assignments from the Microbe Busters Hub, and sends status changes back to it.
- *  - Keeps your PhD plan (coursework, milestones, open questions, contacts) in four "PhD ..." tabs,
+ *  - Keeps your PhD plan (coursework, milestones, open questions, contacts, fellowships) in five "PhD ..." tabs,
  *    and your instructors' office hours in an "Office hours" tab. Edit them from the site or in the Sheet.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
@@ -33,6 +33,7 @@ var TABS = {
   'PhD milestones': ['id', 'date', 'term', 'title', 'category', 'status', 'notes', 'link', 'order'],
   'PhD questions': ['id', 'question', 'who', 'status', 'answer', 'asked', 'link'],
   'PhD contacts': ['id', 'name', 'role', 'email', 'group'],
+  'PhD fellowships': ['id', 'name', 'sponsor', 'status', 'deadline', 'time', 'dates', 'amount', 'link', 'todo', 'notes', 'order'],
   'Office hours': ['id', 'courseId', 'name', 'role', 'day', 'start', 'end', 'place', 'link', 'how', 'notes', 'source', 'eventId']
 };
 
@@ -47,9 +48,11 @@ var PHD = {
     status: ['target', 'upcoming', 'done'] } },
   questions: { tab: 'PhD questions', prefix: 'pq-', need: 'question', choices: { status: ['open', 'answered'] } },
   contacts: { tab: 'PhD contacts', prefix: 'pp-', need: 'name', choices: {} },
+  fellowships: { tab: 'PhD fellowships', prefix: 'pf-', need: 'name', choices: {
+    status: ['to-start', 'in-progress', 'submitted', 'planned', 'idea', 'not-eligible', 'awarded', 'declined'] } },
   officeHours: { tab: 'Office hours', prefix: 'oh-', need: 'name', choices: { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } }
 };
-var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts'];
+var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts', 'fellowships'];
 
 /* Settings. Each can be overridden in Project Settings > Script properties without editing code. */
 var DEFAULTS = {
@@ -768,7 +771,7 @@ function cleanPhdRow(kind, input, makeId) {
   });
   if (row.link && !/^https?:\/\//i.test(row.link)) row.link = '';
   if (row.email && !/^[^\s@]+@[^\s@]+$/.test(row.email)) throw new Error('That email address doesn\'t look right.');
-  ['date', 'asked'].forEach(function (h) { if (row[h] && !/^\d{4}-\d{2}-\d{2}$/.test(row[h])) throw new Error('Dates go in as YYYY-MM-DD.'); });
+  ['date', 'asked', 'deadline'].forEach(function (h) { if (row[h] && !/^\d{4}-\d{2}-\d{2}$/.test(row[h])) throw new Error('Dates go in as YYYY-MM-DD.'); });
   if (row.units && !/^\d{1,2}(\.\d)?$/.test(row.units)) throw new Error('Units should be a number, like 3.');
   ['start', 'end'].forEach(function (h) { if (row[h] !== undefined && kind === 'officeHours' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(row[h])) throw new Error('Times go in as HH:MM, like 14:00.'); });
   if (kind === 'officeHours' && row.end <= row.start) throw new Error('The end time has to be after the start time.');

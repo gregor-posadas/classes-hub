@@ -335,10 +335,11 @@
     var turnedIn = dueSoFar.filter(isDone).length, wpct = dueSoFar.length ? Math.round(100 * turnedIn / dueSoFar.length) : 100;
     var mon = weekOf(now), weekList = items().filter(function (it) { var d = due(it); return d && dayNumber(d) >= mon && dayNumber(d) <= mon + 6; });
     var weekDone = weekList.filter(isDone).length, kpct = weekList.length ? Math.round(100 * weekDone / weekList.length) : 100, weekLeft = weekList.length - weekDone;
-    return '<section class="semester" aria-labelledby="prog-h"><h2 id="prog-h" class="semester__h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid semester__grid--3\">" +
+    return '<section class="semester" aria-labelledby="prog-h"><h2 id="prog-h" class="semester__h">' + esc(cfg.semesterLabel || "This semester") + "</h2><div class=\"semester__grid semester__grid--4\">" +
       meter("prog-time", "of the semester has gone by", sem.pct, sem.before ? "Starts " + esc(fmtDay(sem.start)) : sem.after ? "The semester is over." : "Week " + sem.week + " of " + sem.weeks + ", " + plural(sem.left, "day") + " left. Ends " + esc(fmtDay(sem.end)) + ".", "meter--time") +
       meter("prog-work", "of the work due so far is done", wpct, dueSoFar.length ? turnedIn + " of " + dueSoFar.length + " done" : "Nothing due yet.", "meter--work") +
-      meter("prog-week", "of this week's work is done", kpct, weekList.length ? weekDone + " of " + weekList.length + " done" + (weekLeft ? ", " + weekLeft + " left through Sunday" : ". The week is clear.") : "Nothing due this week.", "meter--week") + "</div></section>";
+      meter("prog-week", "of this week's work is done", kpct, weekList.length ? weekDone + " of " + weekList.length + " done" + (weekLeft ? ", " + weekLeft + " left through Sunday" : ". The week is clear.") : "Nothing due this week.", "meter--week") +
+      phdMeter() + "</div></section>";
   }
 
   /* ---------- your Google Calendar events ---------- */
@@ -718,11 +719,63 @@
   function phdNext() {
     var p = phd(); if (!p) return [];
     var nowT = termNow(), today = dayNumber(new Date());
+    var due = fellows().filter(function (f) { return F_OPEN[f.status] && f.deadline && dayFromIso(f.deadline) >= today; }).map(function (f) {
+      return { id: f.id, title: f.name + " due" + (f.time && !/not stated/i.test(f.time) ? ", " + f.time : ""), date: f.deadline, term: "", category: "funding", status: "upcoming", order: "" };
+    });
     return p.milestones.filter(function (m) {
       if (m.status === "done") return false;
       if (m.date) return dayFromIso(m.date) >= today;
       var k = mTerm(m); return isNaN(k) || k >= nowT;
-    }).sort(mSort);
+    }).concat(due).sort(mSort);
+  }
+
+  /* ---------- fellowships ---------- */
+  var F_STATUS = { "to-start": "Not started", "in-progress": "In progress", submitted: "Submitted", planned: "Later cycle", idea: "Idea", "not-eligible": "Not eligible", awarded: "Awarded", declined: "Declined" };
+  var F_SHAPE = { "to-start": "todo", "in-progress": "doing", submitted: "done", planned: "todo", idea: "todo", "not-eligible": "todo", awarded: "done", declined: "todo" };
+  var F_OPEN = { "to-start": 1, "in-progress": 1, idea: 1 };
+  function fellows() { var p = phd(); return (p && p.fellowships) || []; }
+  function fDays(f) { return f.deadline ? dayFromIso(f.deadline) - dayNumber(new Date()) : NaN; }
+  function fTime(f) { return f.time && !/not stated/i.test(f.time) ? f.time : ""; }
+  function fRel(f) {
+    var n = fDays(f); if (isNaN(n) || !F_OPEN[f.status]) return "";
+    if (n < 0) return "Passed";
+    return n === 0 ? "Due today" : n === 1 ? "Due tomorrow" : "In " + n + " days";
+  }
+  function fRank(f) { return F_OPEN[f.status] ? 0 : f.status === "submitted" || f.status === "awarded" ? 1 : f.status === "planned" ? 2 : 3; }
+  function fSort(a, b) {
+    var r = fRank(a) - fRank(b); if (r) return r;
+    var da = a.deadline ? dayFromIso(a.deadline) : Infinity, db = b.deadline ? dayFromIso(b.deadline) : Infinity;
+    return (fRank(a) === 1 ? db - da : da - db) || byOrder(a, b);
+  }
+  function fellowshipsHtml() {
+    var list = fellows().slice().sort(fSort);
+    var soon = list.filter(function (f) { var n = fDays(f); return F_OPEN[f.status] && n >= 0 && n <= 31; }).length;
+    var row = function (f) {
+      var n = fDays(f), urgent = F_OPEN[f.status] && n >= 0 && n <= 7, rel = fRel(f);
+      return '<tr class="' + (fRank(f) === 3 ? "is-muted" : "") + '"><td class="t"><span tabindex="0" data-peek="p:' + esc(f.id) + '">' + esc(f.name) + "</span>" + (f.sponsor ? "<small>" + esc(f.sponsor) + "</small>" : "") + "</td>" +
+        "<td>" + (f.deadline ? '<b class="nowrap">' + esc(fmtDay(noonOf(dayFromIso(f.deadline)), dayFromIso(f.deadline) < dayNumber(new Date()) - 180 || dayFromIso(f.deadline) > dayNumber(new Date()) + 300)) + "</b>" : esc(f.time || "No date yet")) + (f.deadline && fTime(f) ? "<small>" + esc(fTime(f)) + "</small>" : "") +
+        (rel ? '<small class="' + (urgent ? "fdue--soon" : rel === "Passed" ? "fdue--late" : "") + '">' + esc(rel) + "</small>" : "") + "</td>" +
+        '<td><span class="st">' + shape(urgent ? "soon" : F_SHAPE[f.status] || "todo") + esc(F_STATUS[f.status] || f.status) + "</span>" + (f.amount ? "<small>" + esc(f.amount) + "</small>" : "") + "</td>" +
+        "<td>" + esc(f.todo || "") + "</td>" +
+        '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="fellowships" data-id="' + esc(f.id) + '">Edit<span class="sr"> ' + esc(f.name) + "</span></button></td></tr>";
+    };
+    return '<section class="section" aria-labelledby="pf-h"><div class="h-row"><h2 id="pf-h">Fellowships' + (soon ? ' <span class="h-count">' + soon + " due in the next month</span>" : "") + '</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="fellowships">Add a fellowship</button></div>' +
+      (list.length ? '<table class="pm-table ftbl"><caption class="sr">Fellowships, soonest deadline first</caption><thead><tr><th scope="col">Fellowship</th><th scope="col">Deadline</th><th scope="col">Status</th><th scope="col">To do</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' +
+        list.map(row).join("") + "</tbody></table>" : '<p class="empty">No fellowships yet.</p>') +
+      '<p class="section__note">Times are as each sponsor gives them. Point at a name for the other dates and notes.</p></section>';
+  }
+
+  /* ---------- your whole time at Berkeley ---------- */
+  function phdTime() {
+    var s = new Date(zonedIso(PHDCFG.start || "2026-08-26", "00:00")), e = new Date(zonedIso(PHDCFG.end || "2031-05-15", "23:59")), now = new Date();
+    var first = PHDCFG.firstYear || 2026, years = PHDCFG.years || 5;
+    var pct = Math.max(0, Math.min(100, Math.round(1000 * (now - s) / (e - s)) / 10));
+    var yr = Math.max(1, Math.min(years, Math.floor((termNow() - (first * 3 + 2)) / 3) + 1));
+    return { start: s, end: e, pct: pct, year: yr, years: years, left: Math.max(0, dayNumber(e) - dayNumber(now)) };
+  }
+  function phdMeter() {
+    var t = phdTime(), wk = Math.round(t.left / 7);
+    return meter("prog-phd", "of your time at Berkeley", t.pct, "Year " + t.year + " of " + t.years + ". About " + wk.toLocaleString("en-US") + " weeks to graduation, " + esc(PHDCFG.expected || fmtDay(t.end, true)) + ".", "meter--phd");
   }
 
   function isCEE(c) { return /^(CIVENG|CE)\b/i.test(String(c.code || "").trim()); }
@@ -864,10 +917,27 @@
             "<td>" + esc(counts2) + (c.approval ? '<small>Approved: ' + esc(c.approval) + "</small>" : "") + "</td>" +
             '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></td></tr>";
         }).join("") + "</tbody></table>";
-      return st === "idea" || st === "dropped" ? '<details class="done-list"><summary>' + esc(C_STATUS[st]) + " (" + list.length + ")</summary>" + tbl + "</details>" : tbl;
+      if (st === "idea") return optionsHtml(list, fieldName, deName);
+      return st === "dropped" ? '<details class="done-list"><summary>' + esc(C_STATUS[st]) + " (" + list.length + ")</summary>" + tbl + "</details>" : tbl;
     }).join("");
     return '<section class="section" aria-labelledby="pc-h"><div class="h-row"><h2 id="pc-h">Courses</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="courses">Add a course</button></div>' +
       '<p class="section__note">Everything for the Program of Study, from your earlier degree and from Berkeley. Change where a course counts with Edit, and the requirements above update.</p>' + groupsHtml + "</section>";
+  }
+  /* Courses you're weighing, grouped by what they'd count toward, so the page doubles as a menu. */
+  function optionsHtml(list, fieldName, deName) {
+    var groups = [["de", "Designated Emphasis electives"], ["minor-a", (fieldName["minor-a"] || "Minor 1") + " options"], ["minor-b", (fieldName["minor-b"] || "Minor 2") + " options"], ["major", "Major options"], ["", "Other ideas"]];
+    var keyOf = function (c) { return c.de && c.de !== "core" && (!c.field || c.field === "de") ? "de" : c.field === "minor-a" || c.field === "minor-b" || c.field === "major" ? c.field : ""; };
+    var body = groups.map(function (g) {
+      var mine = list.filter(function (c) { return keyOf(c) === g[0]; });
+      if (!mine.length) return "";
+      return '<div class="opt"><h4 class="opt__h">' + esc(g[1]) + ' <span class="h-count">' + mine.length + '</span></h4><ul class="opts">' + mine.map(function (c) {
+        return '<li><p class="opt__t"><b tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</b> " + esc(c.title || "") + (c.units ? ' <span class="opt__u">' + esc(fmtUnits(units(c))) + "</span>" : "") +
+          (g[0] === "de" && deName(c.de) ? ' <span class="opt__u">' + esc(deName(c.de).replace(/^DE elective, /, "")) + "</span>" : "") + "</p>" +
+          (c.notes ? '<p class="opt__n">' + esc(c.notes) + "</p>" : "") +
+          '<button type="button" class="linkbtn" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></li>";
+      }).join("") + "</ul></div>";
+    }).join("");
+    return '<h3 class="opt__title" id="po-h">Options to choose from <small>' + plural(list.length, "course") + '</small></h3><p class="section__note">Courses you\'re weighing. Change one to Planned when you pick it, and the requirements above count it.</p>' + body;
   }
   function byKey(list, key) { var f = (list || []).filter(function (x) { return x.key === key; })[0]; return f ? f.label : ""; }
 
@@ -903,13 +973,14 @@
     if (!p) return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>Your PhD plan needs the new backend. In the Apps Script editor, paste in the new <code>Code.gs</code>, run <b>setup</b> once, and deploy a new version (steps in the README). Then reload this page.</p></div></div>';
     var next = phdNext(), nowT = termNow(), first = PHDCFG.firstYear || 2026, yr = Math.floor((nowT - (first * 3 + 2)) / 3) + 1;
     var openQ = p.questions.filter(function (q) { return q.status !== "answered"; }).length;
-    var nextHtml = next.length ? '<ul class="nexts">' + next.slice(0, 4).map(function (m) {
+    var nextHtml = next.length ? '<ul class="nexts">' + next.slice(0, 5).map(function (m) {
       return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span class=\"nexts__t\" tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
     }).join("") + "</ul>" : '<p class="empty">Nothing coming up on the timeline.</p>';
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>' + esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".</p></div>" +
+      '<div class="phdbar">' + phdMeter() + "</div>" +
       '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Coming up</h2>' + nextHtml +
       (openQ ? '<p class="section__note"><a href="#pq-h" data-jump="pq-h">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
-      requirementsHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
+      fellowshipsHtml() + requirementsHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
       '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p></div>';
   }
 
@@ -944,6 +1015,12 @@
       ["answer", "What you know so far", "textarea"], ["asked", "Asked on", "date", { half: 1 }], ["link", "Link to the email", "url", { half: 2 }]] },
     contacts: { title: ["Add a person", "Edit person"], what: "person", fields: [
       ["name", "Name", "text", { required: true }], ["role", "Role", "text"], ["email", "Email", "email", { half: 1 }], ["group", "Group", "text", { half: 2, hint: "For example CEE or DevEng." }]] },
+    fellowships: { title: ["Add a fellowship", "Edit fellowship"], what: "fellowship", fields: [
+      ["name", "Fellowship", "text", { required: true }], ["sponsor", "Sponsor", "text"],
+      ["status", "Status", "select", { half: 1, opts: function () { return Object.keys(F_STATUS).map(function (k) { return [k, F_STATUS[k]]; }); } }],
+      ["deadline", "Deadline", "date", { half: 2 }],
+      ["time", "Time", "text", { half: 1, hint: "As the sponsor gives it, for example 5:00 PM ET." }], ["amount", "Award", "text", { half: 2 }],
+      ["dates", "Other dates", "textarea", { hint: "Letters, interviews, decisions." }], ["todo", "To do", "text"], ["link", "Link", "url"], ["notes", "Notes", "textarea"]] },
     officeHours: { title: ["Add office hours", "Edit office hours"], what: "office hours", fields: [
       ["name", "Who", "text", { required: true, half: 1 }], ["role", "Role", "text", { half: 2, hint: "For example Instructor or GSI." }],
       ["courseId", "Course", "select", { half: 1, opts: function () { return [["", "No course"]].concat(visibleCourses().map(function (c) { return [c.id, c.shortName]; })); } }],
@@ -992,6 +1069,10 @@
   }
   function phdPeek(id) {
     var p = phd(); if (!p) return "";
+    var f = byId(fellows(), id);
+    if (f) return '<p class="peek__meta"><span class="st">' + shape(F_SHAPE[f.status] || "todo") + esc(F_STATUS[f.status] || "") + "</span>" + (f.amount ? "<span>" + esc(f.amount) + "</span>" : "") + '</p><p class="peek__title">' + esc(f.name) + "</p>" +
+      '<p class="peek__when">' + (f.deadline ? esc(fmtLongDay(noonOf(dayFromIso(f.deadline)))) + (fTime(f) ? ", " + esc(fTime(f)) : "") + ". " + esc(fRel(f)) : esc(f.time || "No date yet")) + "</p>" +
+      (f.dates ? '<p class="peek__body">' + esc(f.dates) + "</p>" : "") + (f.todo ? '<p class="peek__body"><b>To do:</b> ' + esc(f.todo) + "</p>" : "") + (f.notes ? '<p class="peek__foot">' + esc(f.notes) + "</p>" : "");
     var m = byId(p.milestones, id);
     if (m) return '<p class="peek__meta"><span>' + esc(M_CAT[m.category] || "") + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + esc(M_STATUS[m.status] || "") + "</span></p><p class=\"peek__title\">" + esc(m.title) + "</p>" +
       '<p class="peek__when">' + esc(mDateText(m)) + "</p>" + (m.notes ? '<p class="peek__body">' + esc(m.notes) + "</p>" : "") + '<p class="peek__foot">From the PhD milestones tab.</p>';
@@ -1501,6 +1582,8 @@
         "prog-time": ["How far through the semester you are", "Days gone by since instruction began (" + fmtDay(semester().start) + "), out of every day until the semester ends (" + fmtDay(semester().end) + "). It moves on its own, one day at a time."],
         "prog-work": ["Your track record so far", "Everything whose due date has already passed this semester: bCourses assignments, " + teamName() + " assignments and your own to-dos. It counts as done if bCourses shows it submitted, or you marked it Done.",
           "In-class or on-paper work is left out until it's graded or you mark it Done, since bCourses can't tell whether you did it."],
+        "prog-phd": ["Your time at Berkeley", "Days since you started (" + fmtDay(phdTime().start, true) + ") out of the days until " + (PHDCFG.expected || "graduation") + ". The end is approximate: the middle of May 2031. Change it in config.js if your plan moves.",
+          "Year " + phdTime().year + " of " + phdTime().years + ". It moves a little every day."],
         "prog-week": ["How this week is going", "Everything due Monday through Sunday of this week, from every course, and how much of it is done. It starts over every Monday.",
           "Work due later this week counts as soon as you finish it early."]
       }[id];
@@ -1623,7 +1706,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007022830";
+  var BUILD = "20261007033323";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

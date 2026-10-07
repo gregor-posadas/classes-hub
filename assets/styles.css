@@ -8,6 +8,7 @@
 @font-face { font-family: "Atkinson"; src: url(../fonts/AtkinsonHyperlegibleNext-Bold.woff2) format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 
 :root {
+  --phd: #800000;   /* maroon from the figure palette: your whole PhD */
   /* Light theme: warm off-white paper, easy on the eyes */
   --paper: #f6f2e9;
   --surface: #fcfaf5;
@@ -626,6 +627,8 @@ a.evt__title:hover { text-decoration: underline; }
 
 /* Three progress bars on top */
 @media (min-width: 720px) { .semester__grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 720px) { .semester__grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1040px) { .semester__grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; } }
 .meter--week .meter__bar i { background: var(--st-doing); }
 
 /* Announcements: new ones stand out, read ones fade back */
@@ -760,3 +763,26 @@ a.evt__title:hover { text-decoration: underline; }
 .ohc__when { font-weight: 700; }
 .ohc__how, .ohc__note, .ohc__foot { font-size: var(--f1); }
 .ohc__note { color: var(--ink-2); }
+
+/* ---------- time at Berkeley, fellowships, options ---------- */
+.meter--phd .meter__bar i { background: var(--phd); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --phd: #e88a8a; } }
+:root[data-theme="dark"] { --phd: #e88a8a; }
+.phdbar { max-width: 40rem; margin: -8px 0 24px; }
+.phdbar .meter__label b { font-size: var(--f4); }
+.ftbl td small { display: block; color: var(--ink-2); font-size: var(--f1); font-weight: 400; }
+.ftbl td small.fdue--soon { color: var(--ink); font-weight: 700; }
+.ftbl td small.fdue--late { color: var(--st-late); font-weight: 700; }
+.ftbl tr.is-muted td { color: var(--ink-2); }
+.ftbl .st { font-size: var(--f1); }
+.opt__title { font-size: var(--f3); margin: 28px 0 4px; padding-bottom: 8px; border-bottom: 4px solid var(--rule-strong); }
+.opt__title small { font-size: var(--f1); font-weight: 400; color: var(--ink-2); margin-left: 8px; }
+.opt { margin-top: 16px; }
+.opt__h { font-size: var(--f2); padding-bottom: 4px; border-bottom: 2px solid var(--rule-strong); }
+.opts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0 32px; }
+@media (min-width: 720px) { .opts { grid-template-columns: 1fr 1fr; } }
+.opts li { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.opt__t, .opt__n { margin: 0; }
+.opt__u { font-size: var(--f1); color: var(--ink-2); border: 1px solid var(--rule); padding: 0 6px; border-radius: 2px; white-space: nowrap; }
+.opt__n { font-size: var(--f1); color: var(--ink-2); margin: 4px 0; }
+.nowrap { white-space: nowrap; }
