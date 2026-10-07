@@ -1163,7 +1163,9 @@
   }
 
   /* ---------- the PhD pages: an overview, plus one page per part, linked by a row of tabs ---------- */
-  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["bluecard", "Blue Card"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Fellowships"], ["p2p", "Path to the Professoriate"], ["people", "Questions and people"]];
+  var PHD_PAGES = [["", "Overview"], ["courses", "Courses"], ["forms", "Forms"], ["de", "Designated Emphasis"], ["timeline", "Timeline"], ["funding", "Fellowships"], ["p2p", "Path to the Professoriate"], ["people", "Questions and people"]];
+  /* Old addresses for pages that were merged into Courses and Forms. */
+  var PHD_OLD = { coursework: ["courses", "list"], planner: ["courses", "term"], bluecard: ["forms", ""] };
   function phdTitle(sub) { var m = PHD_PAGES.filter(function (x) { return x[0] === (sub || ""); })[0]; return m ? m[1] : "PhD"; }
   function phdTabs(sub) {
     return '<nav class="ptabs" aria-label="PhD pages"><ul>' + PHD_PAGES.map(function (x) {
@@ -1178,13 +1180,10 @@
     if (!p) return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>Your PhD plan needs the new backend. In the Apps Script editor, paste in the new <code>Code.gs</code>, run <b>setup</b> once, and deploy a new version (steps in the README). Then reload this page.</p></div></div>';
     var foot = '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p>';
     var docBtn = function (id, label) { var l = byId(p.links || [], id), u = l ? safeUrl(l.url) : ""; return u ? '<a class="btn btn--sm" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(label) + newTab() + "</a>" : ""; };
-    if (sub === "coursework") return '<div class="wrap">' + phdHead(sub, "Your Program of Study: 30 units across the major, two minors and flexible units, plus the core areas.") +
-      '<div class="toolbar toolbar--tight">' + '<a class="btn btn--sm btn--solid" href="#/phd/bluecard">Fill in the Blue Card</a>' + docBtn("pl-bluecard", "Blue Card form (PDF)") + docBtn("pl-posform", "Program of Study form") + '<a class="btn btn--sm" href="#/phd/planner">Try a plan in the planner</a></div>' +
-      requirementsHtml() + coursesHtml() + foot + "</div>";
-    if (sub === "bluecard") return '<div class="wrap wrap--bc">' + phdHead(sub, "Your Tentative Program of Study. Drag courses into the major and minors (or use each course's menu), and the department's form below fills itself in. Made for filling out with your advisor.") +
-      '<div class="toolbar toolbar--tight">' + docBtn("pl-bluecard", "The official form (PDF)") + "</div>" + blueCardHtml() + "</div>";
+    if (sub === "courses") return '<div class="wrap">' + phdHead(sub, "Every course in one place, for your 30 units, the Designated Emphasis and the department forms. Drag a course into a semester or a requirement, or use its menus. Each change saves to your Sheet right away, and the forms fill themselves in from here.") + coursesPageHtml() + foot + "</div>";
+    if (sub === "forms") return '<div class="wrap">' + phdHead(sub, "The department's Blue Card (your tentative plan, signed by your guidance committee) and Program of Study (the final plan, approved before the qualifying exam), filled in from your courses.") +
+      '<div class="toolbar toolbar--tight">' + docBtn("pl-bluecard", "Blank Blue Card (PDF)") + docBtn("pl-posform", "Blank Program of Study (PDF)") + "</div>" + formsHtml() + "</div>";
     if (sub === "de") return '<div class="wrap">' + phdHead(sub, "Development Engineering: five courses and a few steps, separate from your minors.") + deSectionHtml() + deOptionsHtml() + foot + "</div>";
-    if (sub === "planner") return '<div class="wrap">' + phdHead(sub, "Drag courses into semesters, or use each course's menu, and the checks on the right update as you go. Nothing here changes your plan until you save it.") + plannerHtml() + "</div>";
     if (sub === "timeline") return '<div class="wrap">' + phdHead(sub, "Year by year, from your research plan and emails.") + timelineHtml() + foot + "</div>";
     if (sub === "funding") return '<div class="wrap">' + phdHead(sub, "Fellowship applications, soonest deadline first.") + fellowshipsHtml() + foot + "</div>";
     if (sub === "p2p") return '<div class="wrap">' + phdHead(sub, "The Graduate Division's year-long program for first-year PhD students: sessions, the deliverable, and what earns the stipend.") + programsHtml() + foot + "</div>";
@@ -1212,10 +1211,9 @@
     var prog = (p.programs || []).filter(function (x) { return x.kind === "about"; })[0];
     var card = function (href, title, big, small) { return '<li><a class="pcard" href="#/phd/' + href + '"><span class="pcard__t">' + esc(title) + '</span><span class="pcard__big">' + big + '</span><span class="pcard__s">' + small + "</span></a></li>"; };
     return '<section class="section" aria-labelledby="pc2-h"><h2 id="pc2-h">Your PhD, part by part</h2><ul class="pcards">' +
-      card("coursework", "Coursework", esc(placed + " of " + need), esc(parts.done + " units done, " + parts.doing + " in progress, " + parts.planned + " planned")) +
+      card("courses", "Courses", esc(placed + " of " + need + " units"), esc(parts.done + " done, " + parts.doing + " in progress, " + parts.planned + " planned")) +
+      card("forms", "Forms", "Blue Card and Program of Study", esc(plural(formCourses().filter(function (c) { return c.sec; }).length, "course")) + " on them, filled in as you plan") +
       card("de", "Designated Emphasis", esc(st.n.done + " of " + st.total + " courses done"), esc(st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : ""))) +
-      (function () { var on = bcCourses().filter(function (c) { return c.sec; }).reduce(function (n, c) { return n + units(c); }, 0); return card("bluecard", "Blue Card", esc(on + " of " + need + " units"), "Fill it in with your advisor"); })() +
-      card("planner", "Planner", "Try a semester", "Drag courses in and check them against your requirements") +
       card("timeline", "Timeline", nextExam ? esc(nextExam.title) : "Five years", nextExam ? esc(mDateText(nextExam)) : "By year and term") +
       card("funding", "Fellowships", esc(plural(fel.length, "deadline")) + " this month", (function () {
         var w = 0; fellows().forEach(function (f) { if (F_OPEN[f.status]) letters(f).forEach(function (l) { if (l.st === "waiting") w++; }); });
@@ -1280,29 +1278,27 @@
     }).join("");
   }
 
-  /* ---------- the coursework planner: a sandbox on this device, checked live against your requirements ---------- */
-  function simLoad() { try { var s = JSON.parse(store.get("plan") || "{}"); s.place = s.place || {}; s.custom = s.custom || []; return s; } catch (e) { return { place: {}, custom: [] }; } }
-  function simSave(s) { store.set("plan", JSON.stringify(s)); }
+  /* ---------- Courses: every course in one place, seen by semester, by requirement, or as a list ----------
+     Each move saves to your Sheet straight away (one at a time, in order), and Undo puts the last change back.
+     The department forms are filled in from these same courses, so planning and the forms never disagree. */
+  var BC_SECS = ["major", "minor-a", "minor-b", "flexible"];
+  var C_VIEWS = [["term", "By semester"], ["req", "By requirement"], ["list", "List"]];
+  function cView() { var v = store.get("c.view"); return v === "req" || v === "list" ? v : "term"; }
+  function byKey2(list, k) { return list.filter(function (x) { return x.key === k; })[0] || null; }
+  function bcLabel(k) { var f = byKey2(RULES.fields || [], k); return f ? f.label : k === "de" ? "DE only" : k === "none" ? "Not in the 30" : "Not placed"; }
   function planTerms() {
     var first = (PHDCFG.firstYear || 2026) * 3 + 2, until = termKey(PHDCFG.plannerUntil || "Spring 2028"), out = [];
     for (var k = first; k <= until; k++) if (k % 3 !== 1) out.push(termName(k));   // fall and spring; summer left out
     return out;
   }
   function locked(c) { return c.status === "done" || c.status === "in-progress"; }
-  function simCourses() {
-    var p = phd(), s = simLoad(), terms = planTerms();
-    var base = p.courses.filter(function (c) { return c.status !== "dropped"; }).concat(s.custom.map(function (c) { return Object.assign({ status: "idea", custom: true }, c); }));
-    return base.map(function (c) {
-      var x = Object.assign({}, c), where;
-      if (c.status === "done") where = "done";
-      else if (locked(c)) where = c.term;
-      else if (Object.prototype.hasOwnProperty.call(s.place, c.id)) where = s.place[c.id];
-      else where = c.status === "planned" && terms.indexOf(c.term) > -1 ? c.term : "";
-      x.where = where;
-      if (!locked(c)) { x.status = where ? "planned" : "idea"; x.term = where || c.term; }
-      return x;
-    });
+  /* Where a course sits in the semester view: "done", a term column, "?" (planned, but not in a column), or "" (not planned). */
+  function cWhere(c, terms) {
+    if (c.status === "done") return "done";
+    if (c.status === "in-progress" || c.status === "planned") return terms.indexOf(c.term) > -1 ? c.term : "?";
+    return "";
   }
+  function cActive() { return phd().courses.filter(function (c) { return c.status !== "dropped"; }); }
   /* "TuTh 9:30 AM-10:59 AM" into days and minutes; anything without a time (Online) never clashes. */
   function parseSched(s) {
     s = String(s || ""); var days = (s.split(/\d/)[0].match(/Mo|Tu|We|Th|Fr|Sa|Su/g) || []);
@@ -1325,158 +1321,221 @@
     });
     return out;
   }
-  function planCard(c, terms, clash) {
-    var lock = locked(c), mods = (RULES.de || {}).modules || {};
-    var fieldName = {}; (RULES.fields || []).forEach(function (f) { fieldName[f.key] = f.label; });
-    var tags = [fieldName[c.field], c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "", c.field === "none" ? "Not in the 30" : ""].filter(Boolean);
-    var opts = '<option value="">Not planned</option>' + terms.map(function (t) { return '<option value="' + esc(t) + '"' + (c.where === t ? " selected" : "") + ">" + esc(t) + "</option>"; }).join("");
-    return '<li class="pcrd' + (lock ? " is-locked" : "") + (clash ? " has-clash" : "") + (c.custom ? " is-custom" : "") + '"' + (lock ? "" : ' draggable="true" data-plan-id="' + esc(c.id) + '"') + ">" +
-      '<p class="pcrd__t"><b>' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
+  function fieldOpts() { return [["", "Not placed"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["de", "DE only"], ["none", "Not in the 30"]]); }
+  function optHtml(opts, v) { return opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === v ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join(""); }
+
+  function cCard(c, terms, clash, view) {
+    var lock = locked(c), mods = (RULES.de || {}).modules || {}, where = cWhere(c, terms), drag = !(view === "term" && lock);
+    var tags = [c.status === "idea" ? "Idea" : "", c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "",
+      c.school && c.school !== "UC Berkeley" ? c.school : ""].filter(Boolean);
+    var whenOpts = [["", "Not planned"]].concat(where === "?" ? [["?", c.term ? "Planned, " + c.term : "Planned, no term"]] : []).concat(terms.map(function (t) { return [t, t]; }));
+    var grade = c.status === "done" ? (bcLoad().edits[c.id] || {}).grade || "" : "";
+    return '<li class="pcrd' + (lock && view === "term" ? " is-locked" : "") + (clash ? " has-clash" : "") + (c.status === "idea" ? " is-idea" : "") + '"' + (drag ? ' draggable="true" data-c-id="' + esc(c.id) + '"' : "") + ">" +
+      '<p class="pcrd__t"><b tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
       (c.title ? '<p class="pcrd__n">' + esc(c.title) + "</p>" : "") +
-      (c.schedule ? '<p class="pcrd__s">' + esc(c.schedule) + "</p>" : "") +
+      (c.schedule && !lock ? '<p class="pcrd__s">' + esc(c.schedule) + "</p>" : "") +
       (tags.length ? '<p class="pcrd__tags">' + tags.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") + "</p>" : "") +
       (clash ? '<p class="pcrd__clash"><span class="st">' + shape("late") + "Clashes with " + esc(clash.join(", ")) + "</span></p>" : "") +
-      (lock ? '<p class="pcrd__lock">' + esc(C_STATUS[c.status]) + (c.status === "done" ? "" : ", " + esc(c.term)) + "</p>"
-        : '<p class="pcrd__move"><label class="sr" for="mv-' + esc(c.id) + '">Move ' + esc(c.code) + ' to</label><select id="mv-' + esc(c.id) + '" data-plan-move="' + esc(c.id) + '">' + opts + "</select>" +
-          (c.custom ? ' <button type="button" class="linkbtn" data-act="plan-keep" data-id="' + esc(c.id) + '">Save to my courses</button> <button type="button" class="linkbtn" data-act="plan-drop" data-id="' + esc(c.id) + '">Remove</button>' : "") + "</p>") + "</li>";
-  }
-  function plannerChecks(list) {
-    var p = phd(), real = p.courses, out = "";
-    p.courses = list.filter(function (c) { return c.where !== undefined; });
-    try {
-      var fields = RULES.fields || [], need = RULES.total || 30, tot = { done: 0, doing: 0, planned: 0 };
-      var fieldChecks = fields.map(function (f) {
-        var s = fieldStats(f.key); tot.done += s.done; tot.doing += s.doing; tot.planned += s.planned;
-        return check(s.sum >= f.min ? (s.done >= f.min ? true : "doing") : false, "<b>" + esc(f.label) + "</b>: " + s.sum + " of " + f.min + " units", s.sum >= f.min ? "" : fmtUnits(f.min - s.sum) + " short.");
-      }).join("");
-      tot.sum = tot.done + tot.doing + tot.planned;
-      var coreChecks = (RULES.core || []).map(function (a) {
-        var hit = p.courses.filter(function (c) { return c.core === a.key && counted(c); });
-        return check(hit.length ? bestStatus(hit) || "doing" : false, "<b>" + esc(a.label) + "</b>" + (hit.length ? ": " + esc(hit.map(function (c) { return c.code; }).join(", ")) : ""), hit.length ? "" : "No course yet.");
-      }).join("");
-      var st = deState(), de = RULES.de || {}, el = st.electives, md = deModules(el), needM = de.minModules || 2;
-      var home = el.filter(isCEE), both = st.active.filter(function (c) { return c.de && /^minor/.test(c.field); });
-      var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
-        check(md.ok, "Electives from " + needM + " modules", md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1) + " " + m.course.code + (m.state === "pet" ? " (petition)" : ""); }).join(", ")) : "") +
-        check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " CEE elective", home.length > (de.maxHome || 1) ? esc(home.map(function (c) { return c.code; }).join(", ")) : "") +
-        (de.separateFromMinors ? check(both.length ? "warn" : true, "DE kept out of the minors", both.length ? esc(both.map(function (c) { return c.code; }).join(", ")) : "") : "");
-      out = '<h3 class="rq__h">' + need + " units of coursework</h3>" + unitBar(tot, need, "All coursework") + '<p class="ureq__sum">' + unitText(tot, need) + "</p>" +
-        '<ul class="rqs rqs--tight">' + fieldChecks + '</ul><h3 class="rq__h">Core areas</h3><ul class="rqs rqs--tight">' + coreChecks + "</ul>" +
-        '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st, false, md) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>";
-    } finally { p.courses = real; }
-    return out;
-  }
-  function plannerHtml() {
-    var terms = planTerms(), list = simCourses(), minUnits = PHDCFG.fullTime || 12;
-    var cols = terms.map(function (t) {
-      var here = list.filter(function (c) { return c.where === t; }).sort(byOrder), u = here.reduce(function (n, c) { return n + units(c); }, 0), cl = clashes(here);
-      return '<section class="pcol" data-plan-term="' + esc(t) + '" aria-labelledby="pt-' + esc(t.replace(/\s/g, "")) + '"><div class="pcol__head"><h3 id="pt-' + esc(t.replace(/\s/g, "")) + '">' + esc(t) + "</h3>" +
-        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b>" + (u >= minUnits ? "" : ' <span class="ureq__gap">' + (minUnits - u) + " short of full time</span>") + (Object.keys(cl).length ? ' <span class="ureq__gap">Time clash</span>' : "") + "</p></div>" +
-        '<ul class="pcol__list">' + here.map(function (c) { return planCard(c, terms, cl[c.id]); }).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
-    }).join("");
-    var pool = list.filter(function (c) { return !c.where; }).sort(function (a, b) { return (a.custom ? -1 : 0) - (b.custom ? -1 : 0) || byOrder(a, b); });
-    var done = list.filter(function (c) { return c.where === "done"; });
-    var fieldOpts = [["", "Not placed"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["de", "Only the DE"], ["none", "Not in the 30"]]);
-    var coreOpts = [["", "No core area"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; }));
-    var mods = (RULES.de || {}).modules || {}, deOpts = [["", "Not for the DE"]].concat(Object.keys(mods).map(function (k) { return [k, "DE elective, " + mods[k]]; })).concat([["core", "DE core"]]);
-    var sel = function (name, opts) { return '<select id="pa-' + name + '" name="' + name + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + "</option>"; }).join("") + "</select>"; };
-    var form = '<form class="padd" id="plan-add"><h3 class="rq__h">Add a course</h3>' +
-      '<div class="two"><div class="field"><label for="pa-code">Course</label><input id="pa-code" name="code" required placeholder="CYPLAN 204C"></div><div class="field"><label for="pa-units">Units</label><input id="pa-units" name="units" inputmode="decimal" value="3"></div></div>' +
-      '<div class="field"><label for="pa-schedule">Schedule</label><input id="pa-schedule" name="schedule" placeholder="TuTh 9:30 AM-10:59 AM"><small>Days, then times. Leave it empty or write Online for no clash check.</small></div>' +
-      '<div class="field"><label for="pa-field">Counts toward</label>' + sel("field", fieldOpts) + "</div>" +
-      '<div class="two"><div class="field"><label for="pa-core">Core area</label>' + sel("core", coreOpts) + '</div><div class="field"><label for="pa-de">Designated Emphasis</label>' + sel("de", deOpts) + "</div></div>" +
-      '<button type="submit" class="btn btn--sm btn--solid">Add to the list</button></form>';
-    var s = simLoad(), changed = Object.keys(s.place).length + s.custom.length;
-    return '<div class="ptools"><button type="button" class="btn btn--sm btn--solid" data-act="plan-save"' + (changed ? "" : " disabled") + ">Save this plan to my courses</button>" +
-      '<button type="button" class="btn btn--sm" data-act="plan-reset"' + (changed ? "" : " disabled") + ">Start over from my courses</button>" +
-      '<p class="toolbar__note">' + (changed ? plural(changed, "change") + " not saved yet. Kept on this device." : "Matches your saved courses.") + "</p></div>" +
-      '<div class="planner"><div class="planner__main"><div class="pcols">' + cols + "</div>" +
-      '<section class="pcol pcol--pool" data-plan-term="" aria-labelledby="pp2-h"><div class="pcol__head"><h3 id="pp2-h">Not planned</h3><p class="pcol__u">' + plural(pool.length, "course") + ' to choose from. Drag one into a semester.</p></div><ul class="pcol__list pcol__list--pool">' +
-        pool.map(function (c) { return planCard(c, terms, null); }).join("") + "</ul></section>" +
-      (done.length ? '<details class="done-list"><summary>Done already (' + done.length + ")</summary><ul class=\"pcol__list pcol__list--pool\">" + done.map(function (c) { return planCard(c, terms, null); }).join("") + "</ul></details>" : "") +
-      '</div><aside class="planner__side" aria-labelledby="pck-h"><h2 id="pck-h">With this plan</h2>' + plannerChecks(list) + form + "</aside></div>";
-  }
-  function planMove(id, term) { var s = simLoad(); s.place[id] = term; simSave(s); refresh(); }
-  function planSaveAll() {
-    var s = simLoad(), p = phd(), terms = planTerms(), changes = [];
-    simCourses().forEach(function (c) {
-      if (c.custom || locked(c)) return;
-      var real = byId(p.courses, c.id); if (!real) return;
-      if (c.where && (real.status !== "planned" || real.term !== c.where)) changes.push([real, { status: "planned", term: c.where }]);
-      if (!c.where && real.status === "planned" && terms.indexOf(real.term) > -1) changes.push([real, { status: "idea" }]);
-    });
-    var adds = s.custom.length;
-    openDialog('<form method="dialog">' + dlgHead("Save this plan?") + '<div class="dlg__body"><p>' + (changes.length ? plural(changes.length, "course") + " will change term or status in your Sheet" : "No saved course changes") +
-      (adds ? ", and " + plural(adds, "added course") + " will be added as planned" : "") + ".</p></div>" +
-      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep editing</button><button type="submit" class="btn btn--solid">Save the plan</button></div></form>', function () {
-      var jobs = changes.map(function (ch) { return { kind: "courses", row: Object.assign({}, ch[0], ch[1]) }; })
-        .concat(s.custom.map(function (c) { var r = Object.assign({}, c); delete r.custom; delete r.where; r.id = ""; r.status = s.place[c.id] ? "planned" : "idea"; r.term = s.place[c.id] || ""; r.school = r.school || "UC Berkeley"; return { kind: "courses", row: r }; }));
-      return jobs.reduce(function (pr, j) {
-        return pr.then(function () { return apiPost({ action: "saveRecord", kind: j.kind, row: j.row }, "Saving the plan").then(function (r) {
-          var saved = r.row || Object.assign(j.row, { id: j.row.id || newId("pc") }), list = p.courses, i = list.findIndex(function (x) { return x.id === saved.id; });
-          if (i > -1) list[i] = saved; else list.push(saved);
-        }); });
-      }, Promise.resolve()).then(function () { simSave({ place: {}, custom: [] }); refresh(); toast("Plan saved" + (state.demo ? " (demo, not saved)" : "")); });
-    });
+      (c.status === "done" ? '<p class="pcrd__g"><label for="bg-' + esc(c.id) + '">Grade, for the forms</label> <input id="bg-' + esc(c.id) + '" data-bc-grade="' + esc(c.id) + '" value="' + esc(grade) + '" size="3"></p>' : "") +
+      '<div class="pcrd__sels">' +
+      (lock ? '<p class="pcrd__lock">' + esc(C_STATUS[c.status]) + (c.term ? ", " + esc(c.term) : "") + "</p>"
+        : '<p class="pcrd__sel"><label for="cw-' + esc(c.id) + '">When</label><select id="cw-' + esc(c.id) + '" data-c-when="' + esc(c.id) + '">' + optHtml(whenOpts, where) + "</select></p>") +
+      '<p class="pcrd__sel"><label for="cf-' + esc(c.id) + '">Counts for</label><select id="cf-' + esc(c.id) + '" data-c-field="' + esc(c.id) + '">' + optHtml(fieldOpts(), c.field || "") + "</select></p></div>" +
+      '<p class="pcrd__edit"><button type="button" class="linkbtn" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></p></li>";
   }
 
-  /* ---------- the Blue Card (Tentative Program of Study): sort courses into the major and minors, and the card fills itself in ----------
-     Placements, added courses, the header details and anything typed on the card stay on this device until "Save" writes the
-     placements back to your courses. Personal details (SID, address, phone) never leave this device. */
-  var BC_SECS = ["major", "minor-a", "minor-b", "flexible"];
-  function bcLoad() {
-    try { var s = JSON.parse(store.get("bluecard") || "{}"); } catch (e) { s = {}; }
-    s.place = s.place || {}; s.custom = s.custom || []; s.info = s.info || {}; s.edits = s.edits || {}; return s;
+  /* What a move changes in the course's row. */
+  function whenPatch(c, t) {
+    if (t === "?" || locked(c)) return null;
+    return t ? { status: "planned", term: t } : { status: "idea" };
   }
-  function bcSave(s) { store.set("bluecard", JSON.stringify(s)); }
-  function bcLabel(k) { var f = byKey2(RULES.fields || [], k); return f ? f.label : k === "" ? "Not on the card" : k; }
-  function byKey2(list, k) { return list.filter(function (x) { return x.key === k; })[0] || null; }
-  function bcCourses() {
-    var s = bcLoad();
-    return phd().courses.filter(function (c) { return c.status !== "dropped"; })
-      .concat(s.custom.map(function (c) { return Object.assign({ status: "idea", custom: true, school: "UC Berkeley" }, c); }))
-      .map(function (c) {
-        var x = Object.assign({}, c);
-        if (Object.prototype.hasOwnProperty.call(s.place, c.id)) x.sec = s.place[c.id];
-        else x.sec = BC_SECS.indexOf(c.field) > -1 && counted(c) ? c.field : "";
-        return x;
-      });
+  function fieldPatch(c, f) {
+    var p = { field: f };
+    if (c.status === "idea" && BC_SECS.indexOf(f) > -1) p.status = "planned";   // putting an idea on the forms means you plan to take it
+    return p;
   }
-  function bcDone(c) { return c.status === "done" ? (c.term || "Done") : c.status === "in-progress" ? "In progress" + (c.term ? ", " + c.term : "") : "Planned" + (c.term ? ", " + c.term : ""); }
-  function bcCard(c) {
-    var mods = (RULES.de || {}).modules || {};
-    var tags = [c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "", isCEE(c) ? "CEE" : "", c.school && c.school !== "UC Berkeley" ? c.school : ""].filter(Boolean);
-    var opts = [["", "Not on the card"]].concat(BC_SECS.map(function (k) { return [k, bcLabel(k)]; })).map(function (o) { return '<option value="' + esc(o[0]) + '"' + (c.sec === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("");
-    return '<li class="pcrd' + (c.custom ? " is-custom" : "") + '" draggable="true" data-bc-id="' + esc(c.id) + '">' +
-      '<p class="pcrd__t"><b>' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
-      (c.title ? '<p class="pcrd__n">' + esc(c.title) + "</p>" : "") +
-      '<p class="pcrd__s">' + esc(bcDone(c)) + "</p>" +
-      (c.status === "done" ? '<p class="pcrd__g"><label for="bg-' + esc(c.id) + '">Grade</label> <input id="bg-' + esc(c.id) + '" data-bc-grade="' + esc(c.id) + '" value="' + esc((bcLoad().edits[c.id] || {}).grade || "") + '" size="3"></p>' : "") +
-      (tags.length ? '<p class="pcrd__tags">' + tags.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") + "</p>" : "") +
-      '<p class="pcrd__move"><label class="sr" for="bm-' + esc(c.id) + '">Put ' + esc(c.code) + ' in</label><select id="bm-' + esc(c.id) + '" data-bc-move="' + esc(c.id) + '">' + opts + "</select>" +
-      (c.custom ? ' <button type="button" class="linkbtn" data-act="bc-drop" data-id="' + esc(c.id) + '">Remove</button>' : "") + "</p></li>";
+  function moveLabel(c, patch) {
+    if (patch.field !== undefined) return c.code + " to " + bcLabel(patch.field) + (patch.status === "planned" ? " (now planned)" : "");
+    return patch.term && patch.status === "planned" ? c.code + " to " + patch.term : c.code + " out of the plan";
   }
-  function bcChecks(list) {
-    var fields = RULES.fields || [], need = RULES.total || 30, total = 0, out = "";
-    fields.forEach(function (f) {
-      var here = list.filter(function (c) { return c.sec === f.key; }), u = here.reduce(function (n, c) { return n + units(c); }, 0); total += u;
-      out += check(u >= f.min ? (here.every(function (c) { return c.status === "done"; }) ? true : "doing") : false, "<b>" + esc(f.label) + "</b>: " + fmtUnits(u) + " of " + f.min, u >= f.min ? "" : fmtUnits(f.min - u) + " short.");
+
+  /* Saving, one change at a time, and Undo. */
+  var cUndo = [], cChain = Promise.resolve();
+  function cQueue(job, okMsg, onFail) {
+    cChain = cChain.then(job).then(function (r) { if (okMsg) toast(okMsg + (r && r.demo ? " (demo, not saved)" : ". Saved.")); })
+      .catch(function (e) { if (onFail) onFail(); refresh(); toast("Not saved: " + e.message); });
+  }
+  function cRemember(id, before, label) { cUndo.push({ id: id, before: before ? Object.assign({}, before) : null, label: label }); if (cUndo.length > 50) cUndo.shift(); }
+  function cPutRow(row) { var list = phd().courses, i = list.findIndex(function (x) { return x.id === row.id; }); if (i > -1) list[i] = row; else list.push(row); }
+  function cChange(id, patch, quiet) {
+    var c = byId(phd().courses, id); if (!c || !patch) return false;
+    if (Object.keys(patch).every(function (k) { return String(c[k] || "") === String(patch[k] || ""); })) return false;
+    var before = Object.assign({}, c), label = moveLabel(c, patch), row = Object.assign({}, c, patch);
+    cPutRow(row); cRemember(id, before, label);
+    cQueue(function () { return apiPost({ action: "saveRecord", kind: "courses", row: row }, "Saving " + c.code); }, quiet ? "" : label,
+      function () { var cur = byId(phd().courses, id); if (cur && JSON.stringify(cur) === JSON.stringify(row)) cPutRow(before); for (var i = cUndo.length - 1; i >= 0; i--) { if (cUndo[i].id === id && cUndo[i].label === label) { cUndo.splice(i, 1); break; } } });
+    return true;
+  }
+  function cAdd(row) {
+    var p = phd();
+    row.id = row.id && /^pc-/.test(row.id) ? row.id : "pc-" + Math.random().toString(36).slice(2, 10);
+    row.order = String(p.courses.reduce(function (m, x) { return Math.max(m, Number(x.order) || 0); }, 0) + 1);
+    row.school = row.school || "UC Berkeley";
+    cPutRow(row); cRemember(row.id, null, "Added " + row.code);
+    cQueue(function () { return apiPost({ action: "saveRecord", kind: "courses", row: row }, "Adding " + row.code); }, "Added " + row.code,
+      function () { var i = p.courses.findIndex(function (x) { return x.id === row.id; }); if (i > -1) p.courses.splice(i, 1); });
+  }
+  function cUndoLast() {
+    var u = cUndo.pop(); if (!u) { toast("Nothing to undo"); return; }
+    var p = phd(), now = byId(p.courses, u.id);
+    if (!u.before) {   // undo an add: remove it again
+      if (now) p.courses.splice(p.courses.indexOf(now), 1);
+      cQueue(function () { return apiPost({ action: "deleteRecord", kind: "courses", id: u.id }, "Undoing"); }, "Undone: " + u.label, function () { if (now) cPutRow(now); });
+    } else {
+      cPutRow(Object.assign({}, u.before));
+      cQueue(function () { return apiPost({ action: "saveRecord", kind: "courses", row: u.before }, "Undoing"); }, "Undone: " + u.label, function () { if (now) cPutRow(now); else p.courses.splice(p.courses.findIndex(function (x) { return x.id === u.id; }), 1); });
+    }
+    refresh();
+    var b = document.getElementById("c-undo"); if (b && !b.disabled) b.focus();
+  }
+
+  /* Changes made on the old Planner and Blue Card pages, which only lived on this device. */
+  function oldDrafts() {
+    var p = phd(), terms = planTerms(), out = { patches: {}, adds: [] }, plan, bc;
+    try { plan = JSON.parse(store.get("plan") || "{}"); } catch (e) { plan = {}; }
+    try { bc = JSON.parse(store.get("bluecard") || "{}"); } catch (e) { bc = {}; }
+    var add = function (id, patch) { out.patches[id] = Object.assign(out.patches[id] || {}, patch); };
+    Object.keys(plan.place || {}).forEach(function (id) {
+      var c = byId(p.courses, id), t = plan.place[id]; if (!c || locked(c)) return;
+      if (t && (c.status !== "planned" || c.term !== t)) add(id, { status: "planned", term: t });
+      if (!t && c.status === "planned" && terms.indexOf(c.term) > -1) add(id, { status: "idea" });
     });
-    var minors = ["minor-a", "minor-b"].map(function (k) { return list.filter(function (c) { return c.sec === k; }); });
+    Object.keys(bc.place || {}).forEach(function (id) {
+      var c = byId(p.courses, id), s = bc.place[id]; if (!c) return;
+      var cur = Object.assign({}, c, out.patches[id] || {});
+      if (s && (cur.field !== s || cur.status === "idea")) add(id, fieldPatch(cur, s));   // on the old card, an idea counted too
+      if (!s && BC_SECS.indexOf(c.field) > -1 && counted(c)) add(id, { field: c.de ? "de" : "" });
+    });
+    (plan.custom || []).forEach(function (c) { var t = (plan.place || {})[c.id] || ""; out.adds.push({ code: c.code, units: c.units, schedule: c.schedule || "", field: c.field || "", core: c.core || "", de: c.de || "", status: t ? "planned" : "idea", term: t }); });
+    (bc.custom || []).forEach(function (c) { var s = (bc.place || {})[c.id] || ""; out.adds.push({ code: c.code, title: c.title || "", units: c.units, school: c.school || "", term: c.term || "", field: s, status: s ? "planned" : "idea" }); });
+    out.n = Object.keys(out.patches).length + out.adds.length;
+    return out;
+  }
+  function clearOldDrafts() { store.del("plan"); var s = bcLoad(); delete s.place; delete s.custom; bcSave(s); }
+  function oldDraftsHtml() {
+    var d = oldDrafts(), p = phd();
+    if (!d.n) { if (store.get("plan") || /"(place|custom)"/.test(store.get("bluecard") || "")) clearOldDrafts(); return ""; }
+    var lines = Object.keys(d.patches).map(function (id) { return moveLabel(byId(p.courses, id), d.patches[id]); }).concat(d.adds.map(function (a) { return "Add " + a.code; }));
+    return '<div class="cdraft" role="region" aria-labelledby="cdraft-h"><h2 id="cdraft-h">' + plural(d.n, "change") + " from the old Planner and Blue Card pages</h2>" +
+      "<p>These were only kept on this device. Save them to your courses, or let them go.</p><ul>" + lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" +
+      '<p class="cdraft__b"><button type="button" class="btn btn--sm btn--solid" data-act="c-drafts-save">Save them</button> <button type="button" class="btn btn--sm" data-act="c-drafts-drop">Let them go</button></p></div>';
+  }
+  function saveOldDrafts() {
+    var d = oldDrafts();
+    Object.keys(d.patches).forEach(function (id) { cChange(id, d.patches[id], true); });
+    d.adds.forEach(function (a) { cAdd(a); });
+    clearOldDrafts(); refresh();
+    cQueue(function () { return Promise.resolve(); }, plural(d.n, "change") + " saved to your courses");
+  }
+
+  /* The checks that go with the plan: units, core areas, minor rules, the DE, and whether everything fits on the forms. */
+  function cChecks() {
+    var p = phd(), fields = RULES.fields || [], need = RULES.total || 30, tot = { done: 0, doing: 0, planned: 0 };
+    var fieldChecks = fields.map(function (f) {
+      var s = fieldStats(f.key); tot.done += s.done; tot.doing += s.doing; tot.planned += s.planned;
+      return check(s.sum >= f.min ? (s.done >= f.min ? true : "doing") : false, "<b>" + esc(f.label) + "</b>: " + s.sum + " of " + f.min + " units", s.sum >= f.min ? "" : fmtUnits(f.min - s.sum) + " short.");
+    }).join("");
+    tot.sum = tot.done + tot.doing + tot.planned;
+    var coreChecks = (RULES.core || []).map(function (a) {
+      var hit = p.courses.filter(function (c) { return c.core === a.key && counted(c); });
+      return check(hit.length ? bestStatus(hit) || "doing" : false, "<b>" + esc(a.label) + "</b>" + (hit.length ? ": " + esc(hit.map(function (c) { return c.code; }).join(", ")) : ""), hit.length ? "" : "No course yet.");
+    }).join("");
+    var minors = ["minor-a", "minor-b"].map(function (k) { return fieldStats(k).list; });
     var outside = minors.filter(function (m) { return m.length && m.every(function (c) { return !isCEE(c); }); }).length;
     var envIn = minors[0].concat(minors[1]).filter(isEnvECore), deIn = minors[0].concat(minors[1]).filter(function (c) { return c.de; });
-    out += check(outside ? true : false, "At least one minor fully outside CEE", outside ? "" : "Neither minor is outside CEE yet.") +
-      check(envIn.length ? "warn" : true, "No environmental engineering courses in a minor", envIn.length ? "Move " + esc(envIn.map(function (c) { return c.code; }).join(", ")) + "." : "") +
-      (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". CEE has no limit on courses counting toward both (Sara, Sep 4); ask Yael whether the DE has one.") : "");
-    var rws = bcRowsFor(list);
+    var minorChecks = check(outside ? true : false, "At least one minor fully outside CEE", outside ? "" : "Neither minor is outside CEE yet.") +
+      check(envIn.length ? "warn" : true, "No environmental engineering in a minor", envIn.length ? "Move " + esc(envIn.map(function (c) { return c.code; }).join(", ")) + "." : "") +
+      (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". CEE allows it (Sara, Sep 4); ask Yael whether the DE does.") : "");
+    var st = deState(), de = RULES.de || {}, el = st.electives, md = deModules(el), needM = de.minModules || 2, home = el.filter(isCEE);
+    var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
+      check(md.ok, "Electives from " + needM + " modules", md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1) + " " + m.course.code + (m.state === "pet" ? " (petition)" : ""); }).join(", ")) : "") +
+      check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " CEE elective", home.length > (de.maxHome || 1) ? esc(home.map(function (c) { return c.code; }).join(", ")) : "");
+    var rws = bcRowsFor(formCourses()), fit = "";
     Object.keys(PDF_FORMS).forEach(function (k) {
       var F = PDF_FORMS[k], over = [];
-      if (rws.major.length > F.major) over.push("the major and flexible courses (" + rws.major.length + " for " + F.major + " rows)");
+      if (rws.major.length > F.major) over.push("major and flexible (" + rws.major.length + " for " + F.major + " rows)");
       if (rws.minorA.length > F.minor) over.push("Minor 1 (" + rws.minorA.length + " for " + F.minor + " rows)");
       if (rws.minorB.length > F.minor) over.push("Minor 2 (" + rws.minorB.length + " for " + F.minor + " rows)");
-      if (over.length) out += check("warn", "Fits on the " + F.short, "Too many courses for " + esc(over.join(" and ")) + ". Extra ones are left off that PDF.");
+      fit += check(over.length ? "warn" : true, "Fits on the " + esc(F.short), over.length ? "Too many for " + esc(over.join(" and ")) + ". Extra ones are left off." : "");
     });
-    return '<h3 class="rq__h">' + fmtUnits(total) + " of " + need + " on the card</h3>" + unitBar({ done: 0, doing: 0, planned: total, sum: total }, need, "Units on the card") + '<ul class="rqs rqs--tight">' + out + "</ul>";
+    return '<h3 class="rq__h">' + need + " units of coursework</h3>" + unitBar(tot, need, "All coursework") + '<p class="ureq__sum">' + unitText(tot, need) + "</p>" +
+      '<ul class="rqs rqs--tight">' + fieldChecks + '</ul><h3 class="rq__h">Core areas</h3><ul class="rqs rqs--tight">' + coreChecks + "</ul>" +
+      '<h3 class="rq__h">Minors</h3><ul class="rqs rqs--tight">' + minorChecks + "</ul>" +
+      '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st, false, md) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>" +
+      '<h3 class="rq__h">The forms</h3><ul class="rqs rqs--tight">' + fit + '</ul><p class="section__note"><button type="button" class="linkbtn" data-act="c-preview">Preview a form</button> or <a href="#/phd/forms">open the Forms page</a>.</p>';
+  }
+  function cAddForm(terms) {
+    var coreOpts = [["", "No core area"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; }));
+    var mods = (RULES.de || {}).modules || {}, deOpts = [["", "Not for the DE"]].concat(Object.keys(mods).map(function (k) { return [k, "DE elective, " + mods[k]]; })).concat([["core", "DE core"], ["petition", "DE elective by petition"]]);
+    var sel = function (name, opts, v) { return '<select id="ca-' + name + '" name="' + name + '">' + optHtml(opts, v || "") + "</select>"; };
+    return '<form class="padd" id="c-add"><h3 class="rq__h">Add a course</h3><p class="section__note">Saved to your courses right away.</p>' +
+      '<div class="two"><div class="field"><label for="ca-code">Course</label><input id="ca-code" name="code" required placeholder="CYPLAN 204C"></div><div class="field"><label for="ca-units">Units</label><input id="ca-units" name="units" inputmode="decimal" value="3"></div></div>' +
+      '<div class="field"><label for="ca-title">Title</label><input id="ca-title" name="title"></div>' +
+      '<div class="field"><label for="ca-schedule">Schedule</label><input id="ca-schedule" name="schedule" placeholder="TuTh 9:30 AM-10:59 AM"><small>Days, then times, for the clash check.</small></div>' +
+      '<div class="field"><label for="ca-term">When</label>' + sel("term", [["", "Not planned"]].concat(terms.map(function (t) { return [t, t]; }))) + "</div>" +
+      '<div class="field"><label for="ca-field">Counts for</label>' + sel("field", fieldOpts()) + "</div>" +
+      '<div class="field"><label for="ca-core">Core area</label>' + sel("core", coreOpts) + '</div><div class="field"><label for="ca-de">Designated Emphasis</label>' + sel("de", deOpts) + "</div>" +
+      '<button type="submit" class="btn btn--sm btn--solid">Add the course</button></form>';
+  }
+  function cTermView(terms, list) {
+    var minUnits = PHDCFG.fullTime || 12;
+    var cols = terms.map(function (t) {
+      var here = list.filter(function (c) { return cWhere(c, terms) === t; }).sort(byOrder), u = here.reduce(function (n, c) { return n + units(c); }, 0), cl = clashes(here), hid = "ct-" + t.replace(/\s/g, "");
+      return '<section class="pcol" data-c-term="' + esc(t) + '" aria-labelledby="' + hid + '"><div class="pcol__head"><h3 id="' + hid + '">' + esc(t) + "</h3>" +
+        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b>" + (u >= minUnits ? "" : ' <span class="ureq__gap">' + (minUnits - u) + " short of full time</span>") + (Object.keys(cl).length ? ' <span class="ureq__gap">Time clash</span>' : "") + "</p></div>" +
+        '<ul class="pcol__list">' + here.map(function (c) { return cCard(c, terms, cl[c.id], "term"); }).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
+    }).join("");
+    var pool = list.filter(function (c) { var w = cWhere(c, terms); return w === "" || w === "?"; }).sort(function (a, b) { return (cWhere(a, terms) === "?" ? -1 : 0) - (cWhere(b, terms) === "?" ? -1 : 0) || byOrder(a, b); });
+    var done = list.filter(function (c) { return c.status === "done"; }).sort(byOrder);
+    return '<div class="pcols">' + cols + "</div>" +
+      '<section class="pcol pcol--pool" data-c-term="" aria-labelledby="ctp-h"><div class="pcol__head"><h3 id="ctp-h">Not in a semester yet</h3><p class="pcol__u">' + plural(pool.length, "course") + ". Drag one into a semester to plan it; drag one here to take it out of the plan.</p></div>" +
+      '<ul class="pcol__list pcol__list--pool">' + pool.map(function (c) { return cCard(c, terms, null, "term"); }).join("") + "</ul></section>" +
+      (done.length ? '<details class="done-list"><summary>Done already (' + done.length + ")</summary><ul class=\"pcol__list pcol__list--pool\">" + done.map(function (c) { return cCard(c, terms, null, "term"); }).join("") + "</ul></details>" : "");
+  }
+  function cReqView(terms, list) {
+    var cols = BC_SECS.map(function (k) {
+      var here = list.filter(function (c) { return c.field === k && counted(c); }).sort(function (a, b) { return (a.status === "done" ? 0 : 1) - (b.status === "done" ? 0 : 1) || byOrder(a, b); });
+      var f = byKey2(RULES.fields || [], k) || { min: 0 }, u = here.reduce(function (n, c) { return n + units(c); }, 0);
+      return '<section class="pcol" data-c-sec="' + esc(k) + '" aria-labelledby="cr-' + k + '"><div class="pcol__head"><h3 id="cr-' + k + '">' + esc(bcLabel(k)) + "</h3>" +
+        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b> of " + f.min + (u < f.min ? ' <span class="ureq__gap">' + fmtUnits(f.min - u) + " short</span>" : "") + "</p></div>" +
+        '<ul class="pcol__list">' + here.map(function (c) { return cCard(c, terms, null, "req"); }).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
+    }).join("");
+    var pool = list.filter(function (c) { return !(BC_SECS.indexOf(c.field) > -1 && counted(c)); }).sort(function (a, b) { return (a.status === "idea" ? 1 : 0) - (b.status === "idea" ? 1 : 0) || byOrder(a, b); });
+    return '<div class="pcols pcols--bc">' + cols + "</div>" +
+      '<section class="pcol pcol--pool" data-c-sec="" aria-labelledby="crp-h"><div class="pcol__head"><h3 id="crp-h">Not on the forms</h3><p class="pcol__u">DE-only courses, research units and ideas. Drag one into a requirement to count it (an idea becomes planned).</p></div>' +
+      '<ul class="pcol__list pcol__list--pool">' + pool.map(function (c) { return cCard(c, terms, null, "req"); }).join("") + "</ul></section>";
+  }
+  function coursesPageHtml() {
+    var v = cView(), terms = planTerms(), list = cActive(), last = cUndo[cUndo.length - 1];
+    var tools = '<div class="ptools"><div class="seg" role="group" aria-label="Show courses">' + C_VIEWS.map(function (x) { return '<button type="button" class="seg__b" data-act="c-view" data-id="' + x[0] + '" aria-pressed="' + (v === x[0]) + '">' + esc(x[1]) + "</button>"; }).join("") + "</div>" +
+      '<button type="button" class="btn btn--sm" id="c-undo" data-act="c-undo"' + (last ? "" : " disabled") + ">" + (last ? "Undo: " + esc(last.label) : "Undo") + "</button>" +
+      '<button type="button" class="btn btn--sm btn--solid" data-act="c-preview">Preview a form</button>' +
+      '<p class="toolbar__note">Every change saves to your Sheet as you make it.</p></div>';
+    if (v === "list") return tools + oldDraftsHtml() + requirementsHtml() + coursesHtml();
+    return tools + oldDraftsHtml() + '<div class="planner"><div class="planner__main">' + (v === "req" ? cReqView(terms, list) : cTermView(terms, list)) + "</div>" +
+      '<aside class="planner__side" aria-labelledby="cck-h"><h2 id="cck-h">With this plan</h2>' + cChecks() + cAddForm(terms) + "</aside></div>";
+  }
+
+  /* ---------- the department forms (Blue Card and Program of Study), filled in from your courses ----------
+     Your details for the form header (SID, address, phone, degrees, committee) and grades stay on this device only. */
+  function bcLoad() {
+    try { var s = JSON.parse(store.get("bluecard") || "{}"); } catch (e) { s = {}; }
+    s.info = s.info || {}; s.edits = s.edits || {}; return s;
+  }
+  function bcSave(s) { store.set("bluecard", JSON.stringify(s)); }
+  /* The courses that go on the forms: everything done, in progress or planned that counts for the major, a minor or flexible units. */
+  function formCourses() {
+    return phd().courses.filter(counted).map(function (c) { return Object.assign({}, c, { sec: BC_SECS.indexOf(c.field) > -1 ? c.field : "" }); });
   }
   function bcInfo(s, key, label, opts) {
     opts = opts || {};
@@ -1510,7 +1569,7 @@
   }
   function bcFill(L, bytes, k) {
     var F = PDF_FORMS[k], pos = k === "pos";
-    var s = bcLoad(), list = bcCourses(), rows = bcRowsFor(list), p = phd();
+    var s = bcLoad(), list = formCourses(), rows = bcRowsFor(list), p = phd();
     var adv = (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || "") && /kara/i.test(x.name || ""); })[0] || (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || ""); })[0];
     var info = function (k, d) { return s.info[k] !== undefined ? s.info[k] : (d || ""); };
     return L.PDFDocument.load(bytes).then(function (doc) {
@@ -1579,56 +1638,27 @@
       '<p class="section__note">Suggested qualifying exam committee: the chair can\'t be your research advisor, and member 5 is the outside member (Academic Senate).</p><div class="bc-grid bc-grid--qe">' +
       [1, 2, 3, 4, 5].map(function (n) { return bcInfo(s, "qe" + n, n === 1 ? "1. Chair" : n === 5 ? "5. Outside member" : n + ". Member") + bcInfo(s, "qeDept" + n, "Department"); }).join("") + "</div></details>";
   }
-  function blueCardHtml() {
-    var list = bcCourses(), s = bcLoad();
-    var cols = BC_SECS.map(function (k) {
-      var here = list.filter(function (c) { return c.sec === k; }).sort(byOrder), f = byKey2(RULES.fields || [], k) || { min: 0 }, u = here.reduce(function (n, c) { return n + units(c); }, 0);
-      return '<section class="pcol" data-bc-sec="' + esc(k) + '" aria-labelledby="bs-' + k + '"><div class="pcol__head"><h3 id="bs-' + k + '">' + esc(bcLabel(k)) + "</h3>" +
-        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b> of " + f.min + (u < f.min ? ' <span class="ureq__gap">' + fmtUnits(f.min - u) + " short</span>" : "") + "</p></div>" +
-        '<ul class="pcol__list">' + here.map(bcCard).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
-    }).join("");
-    var pool = list.filter(function (c) { return !c.sec; }).sort(function (a, b) { return (a.custom ? -1 : 0) - (b.custom ? -1 : 0) || byOrder(a, b); });
-    var changed = Object.keys(s.place).length + s.custom.length, edited = Object.keys(s.edits).length;
-    var form = '<form class="padd" id="bc-add"><h3 class="rq__h">Add a course</h3>' +
-      '<div class="two"><div class="field"><label for="ba-code">Course</label><input id="ba-code" name="code" required placeholder="CYPLAN 204C"></div><div class="field"><label for="ba-units">Units</label><input id="ba-units" name="units" inputmode="decimal" value="3"></div></div>' +
-      '<div class="field"><label for="ba-title">Title</label><input id="ba-title" name="title"></div>' +
-      '<div class="two"><div class="field"><label for="ba-school">School</label><input id="ba-school" name="school" value="UC Berkeley"></div><div class="field"><label for="ba-term">Term</label><input id="ba-term" name="term" placeholder="Spring 2027"></div></div>' +
-      '<div class="field"><label for="ba-sec">Put it in</label><select id="ba-sec" name="sec">' + [["", "Not on the card"]].concat(BC_SECS.map(function (k) { return [k, bcLabel(k)]; })).map(function (o) { return '<option value="' + o[0] + '">' + esc(o[1]) + "</option>"; }).join("") + "</select></div>" +
-      '<button type="submit" class="btn btn--sm btn--solid">Add</button></form>';
-    return '<div class="ptools"><button type="button" class="btn btn--sm btn--solid" data-act="bc-save"' + (changed ? "" : " disabled") + ">Save these placements to my courses</button>" +
-      '<button type="button" class="btn btn--sm" data-act="bc-reset"' + (changed || edited ? "" : " disabled") + ">Start over from my courses</button>" +
-      
-      '<p class="toolbar__note">' + (changed ? plural(changed, "change") + " not saved to your courses yet. " : "") + "Everything here is kept on this device.</p></div>" +
-      '<div class="planner"><div class="planner__main"><div class="pcols pcols--bc">' + cols + "</div>" +
-      '<section class="pcol pcol--pool" data-bc-sec="" aria-labelledby="bs-pool"><div class="pcol__head"><h3 id="bs-pool">Not on the card</h3><p class="pcol__u">DE-only courses, research units and ideas. Drag one up to put it on the card.</p></div><ul class="pcol__list pcol__list--pool">' +
-      pool.map(bcCard).join("") + "</ul></section></div>" +
-      '<aside class="planner__side" aria-labelledby="bck-h"><h2 id="bck-h">The card so far</h2>' + bcChecks(list) + form + "</aside></div>" +
-      '<section class="bc-off" aria-labelledby="bco-h"><div class="h-row"><h2 id="bco-h">The official forms, filled in</h2><div class="toolbar toolbar--tight"><a class="btn btn--sm btn--solid" data-bc-pdf aria-disabled="true" download="Blue Card (Tentative Program of Study).pdf" href="#">Download the filled form</a><a class="btn btn--sm" data-bc-pdf aria-disabled="true" target="_blank" rel="noopener" href="#">Open it to print' + newTab() + "</a></div></div>" +
-      '<div class="seg" role="group" aria-label="Which form">' + Object.keys(PDF_FORMS).map(function (k) { return '<button type="button" class="seg__b" data-act="bc-form" data-id="' + k + '" aria-pressed="' + (bcWhich() === k) + '">' + esc(PDF_FORMS[k].title) + "</button>"; }).join("") + "</div>" +
-      '<p class="section__note">Both department forms, filled in from the sections above. Major and flexible courses go in the Major rows; Minor 1 and Minor 2 split the Minor rows (' + PDF_FORMS.bluecard.minor + " each on the Blue Card, " + PDF_FORMS.pos.minor + " each on the Program of Study). They update as you move courses. Signatures are left for your faculty.</p>" +
-      bcDetailsHtml() + '<p class="bc-pdf-note" id="bc-pdf-note" role="status">Loading the form…</p><iframe id="bc-frame" class="bc-frame" title="The filled-in form" hidden></iframe></section>' + (setTimeout(bcPreview, 0) ? "" : "");
+  /* The filled form with its switch and buttons. Used on the Forms page and in the preview from Courses. */
+  function formViewerHtml(inDialog) {
+    var k = bcWhich();
+    return '<div class="bc-view"><div class="h-row h-row--plain"><div class="seg" role="group" aria-label="Which form">' + Object.keys(PDF_FORMS).map(function (x) { return '<button type="button" class="seg__b" data-act="bc-form" data-id="' + x + '" aria-pressed="' + (k === x) + '">' + esc(PDF_FORMS[x].title) + "</button>"; }).join("") + "</div>" +
+      '<div class="toolbar toolbar--tight"><a class="btn btn--sm btn--solid" data-bc-pdf aria-disabled="true" download="' + esc(PDF_FORMS[k].title) + '.pdf" href="#">Download the filled form</a><a class="btn btn--sm" data-bc-pdf aria-disabled="true" target="_blank" rel="noopener" href="#">Open it to print' + newTab() + "</a></div></div>" +
+      '<p class="bc-pdf-note" id="bc-pdf-note" role="status">Loading the form…</p><iframe id="bc-frame" class="bc-frame' + (inDialog ? " bc-frame--dlg" : "") + '" title="The filled-in form" hidden></iframe></div>';
   }
-  function bcMove(id, sec) { var s = bcLoad(); s.place[id] = sec; bcSave(s); refresh(); }
-  function bcSaveAll() {
-    var s = bcLoad(), p = phd(), changes = [];
-    bcCourses().forEach(function (c) {
-      if (c.custom) return;
-      var real = byId(p.courses, c.id); if (!real) return;
-      if (c.sec && real.field !== c.sec) changes.push([real, { field: c.sec, status: real.status === "idea" ? "planned" : real.status }]);
-      if (!c.sec && BC_SECS.indexOf(real.field) > -1 && counted(real)) changes.push([real, { field: real.de ? "de" : "" }]);
-    });
-    openDialog('<form method="dialog">' + dlgHead("Save these placements?") + '<div class="dlg__body"><p>' + (changes.length ? plural(changes.length, "course") + " will change where it counts in your Sheet" : "No course changes") +
-      (s.custom.length ? ", and " + plural(s.custom.length, "added course") + " will be added" : "") + ". What you typed on the card stays on this device.</p></div>" +
-      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep editing</button><button type="submit" class="btn btn--solid">Save</button></div></form>', function () {
-      var jobs = changes.map(function (ch) { return Object.assign({}, ch[0], ch[1]); })
-        .concat(s.custom.map(function (c) { var r = Object.assign({}, c); var sec = s.place[c.id] !== undefined ? s.place[c.id] : c.sec; delete r.custom; delete r.sec; r.id = ""; r.field = sec || ""; r.status = sec ? "planned" : "idea"; r.school = r.school || "UC Berkeley"; return r; }));
-      return jobs.reduce(function (pr, row) {
-        return pr.then(function () { return apiPost({ action: "saveRecord", kind: "courses", row: row }, "Saving").then(function (r) {
-          var saved = r.row || Object.assign(row, { id: row.id || newId("pc") }), list = p.courses, i = list.findIndex(function (x) { return x.id === saved.id; });
-          if (i > -1) list[i] = saved; else list.push(saved);
-        }); });
-      }, Promise.resolve()).then(function () { s.place = {}; s.custom = []; bcSave(s); refresh(); toast("Saved to your courses" + (state.demo ? " (demo, not saved)" : "")); });
-    });
+  function formsHtml() {
+    var rws = bcRowsFor(formCourses()), list = function (arr) { return arr.length ? arr.map(function (c) { return '<span tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.status === "done" ? "" : " (" + esc((C_STATUS[c.status] || "").toLowerCase()) + ")"); }).join(", ") : "None yet"; };
+    var u = function (arr) { return fmtUnits(arr.reduce(function (n, c) { return n + units(c); }, 0)); };
+    var rowsSum = '<ul class="fsum"><li><b>Major and flexible</b> <span class="fsum__u">' + plural(rws.major.length, "course") + ", " + u(rws.major) + "</span><span>" + list(rws.major) + "</span></li>" +
+      '<li><b>' + esc(bcLabel("minor-a")) + '</b> <span class="fsum__u">' + plural(rws.minorA.length, "course") + ", " + u(rws.minorA) + "</span><span>" + list(rws.minorA) + "</span></li>" +
+      '<li><b>' + esc(bcLabel("minor-b")) + '</b> <span class="fsum__u">' + plural(rws.minorB.length, "course") + ", " + u(rws.minorB) + "</span><span>" + list(rws.minorB) + "</span></li></ul>";
+    setTimeout(bcPreview, 0);
+    return '<section class="section" aria-labelledby="fo-h"><div class="h-row"><h2 id="fo-h">What goes on the forms</h2><a class="btn btn--sm" href="#/phd/courses">Change them on Courses</a></div>' +
+      '<p class="section__note">Every course you have done, are taking or plan to take that counts for the major, a minor or flexible units. Major and flexible courses share the Major rows; Minor 1 and Minor 2 split the Minor rows (' + PDF_FORMS.bluecard.minor + " each on the Blue Card, " + PDF_FORMS.pos.minor + " each on the Program of Study). Signatures are left for your faculty.</p>" + rowsSum + "</section>" +
+      '<section class="section bc-off" aria-labelledby="fo2-h"><h2 id="fo2-h">The forms, filled in</h2>' + bcDetailsHtml() + formViewerHtml(false) + "</section>";
+  }
+  function previewForm() {
+    openDialog('<div class="dlg--form">' + dlgHead("Preview a form") + '<div class="dlg__body"><p class="section__note">Filled in from your courses as they are now. Your details and grades are on the <a href="#/phd/forms" data-close>Forms page</a>.</p>' + formViewerHtml(true) + "</div></div>").classList.add("dlg--wide");
+    bcPreview();
   }
 
   /* The side column on This week: the next step or two, nothing more. */
@@ -1710,6 +1740,7 @@
       var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh", fellowships: "pf", links: "pl", programs: "pg" }[kind]) });
       var list = recList(kind), i = list.findIndex(function (x) { return x.id === saved.id; });
       if (i > -1) list[i] = saved; else list.push(saved);
+      if (kind === "courses") cRemember(saved.id, existing || null, (existing ? "Edited " : "Added ") + saved.code);
       refresh(); toast((existing ? "Saved" : "Added") + (r.demo ? " (demo, not saved)" : ""));
     });
   }
@@ -1720,6 +1751,7 @@
       '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it</button><button type="submit" class="btn btn--solid">Delete</button></div></form>', function () {
       return apiPost({ action: "deleteRecord", kind: kind, id: id }).then(function (r) {
         var list = recList(kind), i = list.findIndex(function (x) { return x.id === id; }); if (i > -1) list.splice(i, 1);
+        if (kind === "courses") cRemember(id, row, "Deleted " + row.code);
         refresh(); toast("Deleted" + (r.demo ? " (demo, not saved)" : ""));
       });
     });
@@ -1982,7 +2014,9 @@
     else if (view === "d") { html = viewDay(h[1]); var dd = dayFromIso(h[1]); if (!isNaN(dd)) title = fmtLongDay(noonOf(dd)); }
     else if (view === "news") { html = viewNews(); title = "Announcements"; }
     else if (view === "about") { html = viewAbout(); title = "About and settings"; }
-    else if (view === "phd") { html = viewPhd(h[1] || ""); title = h[1] ? phdTitle(h[1]) + " | PhD" : "PhD"; }
+    else if (view === "phd") {
+      if (PHD_OLD[h[1]]) { var old = PHD_OLD[h[1]]; if (old[1]) store.set("c.view", old[1]); h[1] = old[0]; try { history.replaceState(null, "", "#/phd/" + old[0]); } catch (e) { /* ignore */ } }
+      html = viewPhd(h[1] || ""); title = h[1] ? phdTitle(h[1]) + " | PhD" : "PhD"; }
     else if (view === "hours") { html = viewOfficeHours(); title = "Office hours"; }
     else { html = viewHome(); }
     hidePeek(true);
@@ -2139,8 +2173,11 @@
       store.set("f.show", document.getElementById("f-show").value);
       refresh(); var again = document.getElementById(t.id); if (again) again.focus();
     }
-    if (t.hasAttribute && t.hasAttribute("data-bc-move")) { var bid = t.getAttribute("data-bc-move"); bcMove(bid, t.value); var again3 = document.getElementById("bm-" + bid); if (again3) again3.focus(); return; }
-    if (t.hasAttribute && t.hasAttribute("data-plan-move")) { var pid = t.getAttribute("data-plan-move"); planMove(pid, t.value); var again2 = document.getElementById("mv-" + pid); if (again2) again2.focus(); return; }
+    if (t.hasAttribute && (t.hasAttribute("data-c-when") || t.hasAttribute("data-c-field"))) {
+      var wid = t.getAttribute("data-c-when"), fid = t.getAttribute("data-c-field"), cc = byId(phd().courses, wid || fid), keep = t.id;
+      if (cc) cChange(cc.id, wid ? whenPatch(cc, t.value) : fieldPatch(cc, t.value));
+      refresh(); var again2 = document.getElementById(keep); if (again2) again2.focus(); return;
+    }
     if (t.id === "show-events") { store.set("showEvents", t.checked ? "1" : "0"); refresh(); var se = document.getElementById("show-events"); if (se) se.focus(); }
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
   });
@@ -2179,21 +2216,12 @@
     if (act === "save-calendars") saveCalendars(b);
     if (act === "mark-all-read") markAllRead();
     if (act === "new-phd") { var k0 = b.getAttribute("data-kind"), pre = b.getAttribute("data-program") ? { program: b.getAttribute("data-program"), kind: "session", status: "upcoming" } : null; openDialog(phdForm(k0, null, pre), function (v) { return savePhd(k0, null, v); }); }
-    if (act === "bc-save") bcSaveAll();
     if (act === "bc-form") { store.set("bc.form", id); document.querySelectorAll("[data-act=bc-form]").forEach(function (x) { x.setAttribute("aria-pressed", String(x.getAttribute("data-id") === id)); }); bcPreview(); }
-    if (act === "bc-reset") { store.del("bluecard"); refresh(); toast("Back to your saved courses"); }
-    if (act === "bc-drop") { var sb = bcLoad(); sb.custom = sb.custom.filter(function (x) { return x.id !== id; }); delete sb.place[id]; bcSave(sb); refresh(); }
-    if (act === "plan-save") planSaveAll();
-    if (act === "plan-reset") { simSave({ place: {}, custom: [] }); refresh(); toast("Back to your saved courses"); }
-    if (act === "plan-drop") { var s0 = simLoad(); s0.custom = s0.custom.filter(function (x) { return x.id !== id; }); delete s0.place[id]; simSave(s0); refresh(); }
-    if (act === "plan-keep") {
-      var s1 = simLoad(), cx = byId(s1.custom, id); if (!cx) return;
-      var row = Object.assign({}, cx, { id: "", status: s1.place[id] ? "planned" : "idea", term: s1.place[id] || "", school: "UC Berkeley" });
-      apiPost({ action: "saveRecord", kind: "courses", row: row }).then(function (r) {
-        state.data.phd.courses.push(r.row || Object.assign(row, { id: newId("pc") }));
-        s1.custom = s1.custom.filter(function (x) { return x.id !== id; }); delete s1.place[id]; simSave(s1); refresh(); toast("Added to your courses" + (r.demo ? " (demo, not saved)" : ""));
-      }).catch(function (e) { toast("Not saved: " + e.message); });
-    }
+    if (act === "c-view") { store.set("c.view", id); refresh(); var cv = document.querySelector('[data-act="c-view"][data-id="' + id + '"]'); if (cv) cv.focus(); }
+    if (act === "c-undo") cUndoLast();
+    if (act === "c-preview") previewForm();
+    if (act === "c-drafts-save") saveOldDrafts();
+    if (act === "c-drafts-drop") { clearOldDrafts(); refresh(); toast("Let go of the old changes"); }
     if (act === "edit-phd") { var k1 = b.getAttribute("data-kind"), row1 = byId(recList(k1), id); if (row1) openDialog(phdForm(k1, row1), function (v) { return savePhd(k1, row1, v); }); }
     if (act === "delete-phd") { ev.preventDefault(); var d2 = b.closest("dialog"); if (d2) d2.close(); confirmDeletePhd(b.getAttribute("data-kind"), id); }
     if (act === "cal-prev" || act === "cal-next" || act === "cal-today") {
@@ -2212,22 +2240,14 @@
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "all-filter" || ev.target.id === "news-filter") { ev.preventDefault(); return; }
     if (ev.target.id === "token-form") { ev.preventDefault(); saveToken(ev.target); return; }
-    if (ev.target.id === "bc-add") {
+    if (ev.target.id === "c-add") {
       ev.preventDefault();
-      var fb = new FormData(ev.target), cb = { id: "bc-" + Math.random().toString(36).slice(2, 8) }, secb = "";
-      fb.forEach(function (v, k) { if (k === "sec") secb = String(v); else cb[k] = String(v).trim(); });
-      if (!cb.code) return;
-      if (cb.units && !/^\d{1,2}(\.\d)?$/.test(cb.units)) { toast("Units should be a number, like 3"); return; }
-      var sbc = bcLoad(); sbc.custom.push(cb); sbc.place[cb.id] = secb; bcSave(sbc); refresh(); toast("Added " + cb.code + " to " + bcLabel(secb));
-      return;
-    }
-    if (ev.target.id === "plan-add") {
-      ev.preventDefault();
-      var fd = new FormData(ev.target), c = { id: "sim-" + Math.random().toString(36).slice(2, 8) };
+      var fd = new FormData(ev.target), c = {};
       fd.forEach(function (v, k) { c[k] = String(v).trim(); });
       if (!c.code) return;
       if (c.units && !/^\d{1,2}(\.\d)?$/.test(c.units)) { toast("Units should be a number, like 3"); return; }
-      var s2 = simLoad(); s2.custom.push(c); simSave(s2); refresh(); toast("Added " + c.code + " to Not planned");
+      c.status = c.term || BC_SECS.indexOf(c.field) > -1 ? "planned" : "idea";
+      cAdd(c); refresh(); var ca = document.getElementById("ca-code"); if (ca) ca.focus();
       return;
     }
     if (ev.target.id === "team-form") { ev.preventDefault(); saveTeamCode(ev.target); return; }
@@ -2236,21 +2256,37 @@
     store.set("code", document.getElementById("code").value.trim());
     start();
   });
-  /* Planner drag and drop. Every card also has a Move to menu, so the keyboard and screen readers don't need dragging. */
+  /* Drag and drop on Courses. Every card also has When and Counts for menus, so the keyboard and screen readers don't need dragging. */
   document.addEventListener("dragstart", function (ev) {
-    var c = ev.target.closest && ev.target.closest("[data-plan-id],[data-bc-id]"); if (!c) return;
-    ev.dataTransfer.setData("text/plain", c.getAttribute("data-plan-id") || c.getAttribute("data-bc-id")); ev.dataTransfer.effectAllowed = "move"; c.classList.add("is-dragging");
+    var c = ev.target.closest && ev.target.closest("[data-c-id]"); if (!c) return;
+    ev.dataTransfer.setData("text/plain", c.getAttribute("data-c-id")); ev.dataTransfer.effectAllowed = "move"; c.classList.add("is-dragging");
   });
-  document.addEventListener("dragend", function (ev) { var c = ev.target.closest && ev.target.closest("[data-plan-id],[data-bc-id]"); if (c) c.classList.remove("is-dragging"); document.querySelectorAll(".pcol.is-over").forEach(function (x) { x.classList.remove("is-over"); }); });
+  document.addEventListener("dragend", function (ev) { var c = ev.target.closest && ev.target.closest("[data-c-id]"); if (c) c.classList.remove("is-dragging"); document.querySelectorAll(".pcol.is-over").forEach(function (x) { x.classList.remove("is-over"); }); });
   document.addEventListener("dragover", function (ev) {
-    var col = ev.target.closest && ev.target.closest("[data-plan-term],[data-bc-sec]"); if (!col) return;
+    var col = ev.target.closest && ev.target.closest("[data-c-term],[data-c-sec]"); if (!col) return;
     ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
     document.querySelectorAll(".pcol.is-over").forEach(function (x) { if (x !== col) x.classList.remove("is-over"); }); col.classList.add("is-over");
   });
   document.addEventListener("drop", function (ev) {
-    var col = ev.target.closest && ev.target.closest("[data-plan-term],[data-bc-sec]"); if (!col) return;
-    ev.preventDefault(); var id = ev.dataTransfer.getData("text/plain"); if (!id) return;
-    if (col.hasAttribute("data-bc-sec")) bcMove(id, col.getAttribute("data-bc-sec")); else planMove(id, col.getAttribute("data-plan-term"));
+    var col = ev.target.closest && ev.target.closest("[data-c-term],[data-c-sec]"); if (!col) return;
+    ev.preventDefault(); col.classList.remove("is-over");
+    var c = byId(phd().courses, ev.dataTransfer.getData("text/plain")); if (!c) return;
+    if (col.hasAttribute("data-c-sec")) {
+      var sec = col.getAttribute("data-c-sec");
+      if (sec) cChange(c.id, fieldPatch(c, sec));
+      else if (BC_SECS.indexOf(c.field) > -1) cChange(c.id, { field: c.de ? "de" : "" });
+    } else {
+      var t = col.getAttribute("data-c-term");
+      if (locked(c)) { toast(c.code + " is " + (C_STATUS[c.status] || "").toLowerCase() + ", so its semester stays put"); return; }
+      if (t || c.status !== "idea") cChange(c.id, whenPatch(c, t));
+    }
+    refresh();
+  });
+  /* Ctrl+Z (or Cmd+Z) on the Courses page undoes the last change, unless you're typing in a box. */
+  document.addEventListener("keydown", function (ev) {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.shiftKey || ev.key.toLowerCase() !== "z") return;
+    if (!/^#\/phd\/courses/.test(location.hash) || /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target.tagName || "")) || ev.target.isContentEditable || document.querySelector("dialog[open]")) return;
+    ev.preventDefault(); cUndoLast();
   });
   /* Typing on the Blue Card saves as you go, without redrawing the page (so the cursor stays put). */
   document.addEventListener("input", function (ev) {
@@ -2430,7 +2466,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007082644";
+  var BUILD = "20261007085000";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
