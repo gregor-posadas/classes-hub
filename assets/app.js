@@ -949,9 +949,12 @@
     said += " Modules: " + md.n + " of the " + need + " needed" + (md.n > md.firm ? ", counting a petition" : "") + ".";
     return '<div class="debarg" role="img" aria-label="' + esc(said) + '" style="grid-template-columns:repeat(' + st.total + ',minmax(0,1fr))">' +
       '<span class="debarg__k" style="grid-column:1 / ' + (core + 1) + '" aria-hidden="true">Core</span><span class="debarg__k" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">Electives</span>' +
-      slots + '<span class="demods" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">' + md.mods.map(function (m) {
-        return '<span class="demod is-' + m.state + '">' + shape(m.shape) + "M" + esc(m.key.slice(1)) + "</span>";
-      }).join("") + '</span><span class="debarg__k debarg__k--m" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">Modules: need ' + need + " of " + md.mods.length + "</span></div>";
+      slots + '<span class="demods" style="grid-column:' + (core + 1) + " / -1;grid-template-columns:repeat(" + (st.total - core) + ',minmax(0,1fr))" aria-hidden="true">' + st.slots.slice(core).map(function (sl) {
+        var c = sl.course, m = c ? md.mods.filter(function (x) { return x.course === c; })[0] : null;
+        if (m) return '<span class="demod is-' + m.state + '">' + shape(m.shape) + "M" + esc(m.key.slice(1)) + (m.state === "pet" ? "?" : "") + "</span>";
+        return '<span class="demod is-' + (c ? "spare" : "open") + '">' + (c ? (modsOf(c).length ? "Extra" : "No module") : "Any") + "</span>";
+      }).join("") + '</span><span class="debarg__k debarg__k--m" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">Module each elective covers. ' +
+        (md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1); }).join(" and ")) + " covered, " : "") + "need " + need + " of " + md.mods.length + ".</span></div>";
   }
   function codeKey(c) { return String(c && c.code !== undefined ? c.code : c || "").replace(/\s+/g, " ").trim().toUpperCase(); }
   /* Which modules an elective can count for: the DE list (config) first, otherwise the module picked for it. */
@@ -984,7 +987,7 @@
   }
   function deModulesHtml(md) {
     var need = (RULES.de || {}).minModules || 2;
-    return '<div class="demodcards"><h3 class="rq__h">Modules: electives from at least ' + need + " of " + md.mods.length + '</h3><p class="section__note">Each elective counts toward one module. The faint boxes show which module each of your electives is covering.</p><ul>' + md.mods.map(function (m) {
+    return '<div class="demodcards"><h3 class="rq__h">Modules: electives from at least ' + need + " of " + md.mods.length + '</h3><p class="section__note">Each elective counts toward one module. The faint boxes under the electives in the bar show which module each one is covering.</p><ul>' + md.mods.map(function (m) {
       var c = m.course, others = m.all.filter(function (e) { return e !== c; });
       return '<li class="demodc is-' + m.state + '"><span class="demodc__k">' + esc(m.name) + '</span><span class="st">' + shape(m.shape) + esc(m.word) + "</span>" +
         (c ? '<span class="demodc__c">' + courseRef(c) + (c.de === "petition" ? " by petition" : "") + "</span>" : "") +
@@ -2159,7 +2162,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007053426";
+  var BUILD = "20261007054241";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

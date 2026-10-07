@@ -907,8 +907,8 @@ a.evt__title:hover { text-decoration: underline; }
 .debarg .debar__slot { height: 18px; box-sizing: border-box; }
 .debarg__k { font-size: var(--f1); color: var(--ink-2); font-weight: 700; }
 .debarg__k--m { font-weight: 400; }
-.demods { display: flex; gap: 4px; padding: 4px; border: 2px dashed var(--rule); border-radius: 2px; }
-.demod { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 4px; font-size: var(--f1); font-weight: 700; color: var(--ink-2); border: 1px dashed var(--rule-strong); opacity: .75; white-space: nowrap; overflow: hidden; }
+.demods { display: grid; gap: 4px; padding: 4px 0; border-top: 2px dashed var(--rule); border-bottom: 2px dashed var(--rule); }
+.demod { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 4px; font-size: var(--f1); font-weight: 700; color: var(--ink-2); border: 1px dashed var(--rule-strong); opacity: .75; white-space: nowrap; overflow: hidden; }
 .demod.is-done, .demod.is-doing { opacity: 1; color: var(--ink); border-style: solid; }
 .demod.is-pet, .demod.is-plan { opacity: .9; color: var(--ink); }
 .demod .st__shape { width: 14px; height: 14px; flex: none; }
