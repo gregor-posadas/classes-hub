@@ -768,7 +768,8 @@ a.evt__title:hover { text-decoration: underline; }
 .meter--phd .meter__bar i { background: var(--phd); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --phd: #e88a8a; } }
 :root[data-theme="dark"] { --phd: #e88a8a; }
-.phdbar { max-width: 40rem; margin: -8px 0 24px; }
+.phdbar { display: grid; gap: 16px 40px; margin: -8px 0 24px; }
+@media (min-width: 720px) { .phdbar { grid-template-columns: 1fr 1fr; } }
 .phdbar .meter__label b { font-size: var(--f4); }
 .ftbl td small { display: block; color: var(--ink-2); font-size: var(--f1); font-weight: 400; }
 .ftbl td small.fdue--soon { color: var(--ink); font-weight: 700; }
@@ -786,3 +787,37 @@ a.evt__title:hover { text-decoration: underline; }
 .opt__u { font-size: var(--f1); color: var(--ink-2); border: 1px solid var(--rule); padding: 0 6px; border-radius: 2px; white-space: nowrap; }
 .opt__n { font-size: var(--f1); color: var(--ink-2); margin: 4px 0; }
 .nowrap { white-space: nowrap; }
+
+/* ---------- DE tracker ---------- */
+.debar { display: flex; gap: 4px; height: 14px; }
+.debar--big { height: 18px; }
+.debar__slot { flex: 1; border: 2px solid var(--rule-strong); background: var(--surface); }
+.debar__slot.ubar__done { background: var(--st-done); }
+.debar__slot.ubar__doing { background: var(--st-doing); }
+.debar__slot.ubar__plan { background: repeating-linear-gradient(135deg, var(--ink-2) 0 2px, var(--surface) 2px 7px); }
+.debar__slot.is-open { border-style: dashed; }
+.meter--de .debar { margin-bottom: 0; }
+.phdbar .meter--de .meter__label b { font-size: var(--f4); }
+.deslots { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.deslot { display: grid; gap: 2px; align-content: start; padding: 12px; border: 2px solid var(--rule-strong); background: var(--surface); }
+.deslot.is-open { border-style: dashed; background: transparent; }
+.deslot__k { font-size: var(--f1); color: var(--ink-2); font-weight: 700; }
+.deslot__c { font-weight: 700; }
+.deslot__t, .deslot__m { font-size: var(--f1); color: var(--ink-2); }
+.deslot__st { font-size: var(--f1); margin-top: 4px; }
+
+/* ---------- meetings with your advisor ---------- */
+.mtgs { display: grid; gap: 16px 32px; margin-top: 12px; }
+@media (min-width: 900px) { .mtgs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.mtg { min-width: 0; }
+.mtg__k { margin: 0 0 4px; font-size: var(--f1); color: var(--ink-2); font-weight: 700; }
+.mtg__when { margin: 0; font-size: var(--f3); font-weight: 700; }
+.mtg__act { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.mtg__more { margin: 8px 0 0; font-size: var(--f1); color: var(--ink-2); }
+.mtg__qs { margin: 0; padding-left: 20px; }
+.mtg__qs li { margin: 4px 0; }
+.docs { list-style: none; margin: 0; padding: 0; }
+.docs li { padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.docs small { display: block; color: var(--ink-2); font-size: var(--f1); }
+.docs__edit { font-size: var(--f1); }
+@media (min-width: 1000px) { .deslots { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

@@ -519,6 +519,30 @@
     "meetLink": "",
     "url": "https://calendar.google.com/",
     "tentative": false
+   },
+   {
+    "id": "g-demo-kara",
+    "calendar": "Personal",
+    "title": "Kara 1:1 Meeting",
+    "start": "2026-10-07T09:10:00-07:00",
+    "end": "2026-10-07T10:00:00-07:00",
+    "allDay": false,
+    "location": "",
+    "meetLink": "https://berkeley.zoom.us/j/0",
+    "url": "",
+    "tentative": false
+   },
+   {
+    "id": "g-demo-kara2",
+    "calendar": "Personal",
+    "title": "Kara 1:1 Meeting",
+    "start": "2026-10-21T09:10:00-07:00",
+    "end": "2026-10-21T10:00:00-07:00",
+    "allDay": false,
+    "location": "",
+    "meetLink": "https://berkeley.zoom.us/j/0",
+    "url": "",
+    "tentative": false
    }
   ]
  },
@@ -860,7 +884,7 @@
    {
     "id": "pq-2",
     "question": "Which two minor fields? (sample)",
-    "who": "Research advisor",
+    "who": "Kara",
     "status": "open",
     "answer": "",
     "asked": "",
@@ -955,6 +979,22 @@
     "todo": "",
     "notes": "",
     "order": "4"
+   }
+  ],
+  "links": [
+   {
+    "id": "pl-kara-notes",
+    "label": "Advisor meeting notes (sample)",
+    "url": "https://docs.google.com/document/",
+    "notes": "Shared notes for 1:1s",
+    "order": "1"
+   },
+   {
+    "id": "pl-2",
+    "label": "Research journal (sample)",
+    "url": "https://docs.google.com/document/",
+    "notes": "",
+    "order": "2"
    }
   ]
  },

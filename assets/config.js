@@ -18,6 +18,8 @@ window.CH_CONFIG = {
     end: "2031-05-15",     // about the end of Spring 2031; move it if your plan changes
     years: 5,
     expected: "Spring 2031",
+    // Meetings with your advisor: events whose title matches, the notes doc (a row in the "PhD links" tab), and whose questions to show
+    meetings: { title: "Meetings with Kara", match: "Kara 1:1", notesLink: "pl-kara-notes", who: "Kara", whoLabel: "Kara" },
     rules: {
       total: 30,
       fields: [
@@ -36,6 +38,13 @@ window.CH_CONFIG = {
         core: ["DEVENG C200", "DEVENG 210"],
         electives: 3, minModules: 2, maxHome: 1,
         separateFromMinors: true,   // your choice: DE courses stay out of the minor fields
+        steps: [
+          { label: "Admitted to the DE", note: "Apply at least one semester before the qualifying exam.", milestone: "pm-de" },
+          { label: "DevEng C200 done before the qualifying exam", auto: "c200" },
+          { label: "A DevEng Graduate Group member on your qualifying exam committee", note: "Both head graduate advisors sign the exam application, CEE first." },
+          { label: "A DevEng Graduate Group member on your dissertation committee" },
+          { label: "Development engineering themes in the dissertation", note: "For example, technology for economic and social development." }
+        ],
         modules: { m1: "Module 1, project design", m2: "Module 2, evaluation and social impact", m3: "Module 3, technology development" }
       }
     },

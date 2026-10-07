@@ -13,7 +13,7 @@
  *  - Emails you at 8 AM, only on days with something to say.
  *  - Shows the events on your Google calendars next to your work (read only).
  *  - Brings in your assignments from the Microbe Busters Hub, and sends status changes back to it.
- *  - Keeps your PhD plan (coursework, milestones, open questions, contacts, fellowships) in five "PhD ..." tabs,
+ *  - Keeps your PhD plan (coursework, milestones, open questions, contacts, fellowships, links) in six "PhD ..." tabs,
  *    and your instructors' office hours in an "Office hours" tab. Edit them from the site or in the Sheet.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
@@ -33,6 +33,7 @@ var TABS = {
   'PhD milestones': ['id', 'date', 'term', 'title', 'category', 'status', 'notes', 'link', 'order'],
   'PhD questions': ['id', 'question', 'who', 'status', 'answer', 'asked', 'link'],
   'PhD contacts': ['id', 'name', 'role', 'email', 'group'],
+  'PhD links': ['id', 'label', 'url', 'notes', 'order'],
   'PhD fellowships': ['id', 'name', 'sponsor', 'status', 'deadline', 'time', 'dates', 'amount', 'link', 'todo', 'notes', 'order'],
   'Office hours': ['id', 'courseId', 'name', 'role', 'day', 'start', 'end', 'place', 'link', 'how', 'notes', 'source', 'eventId']
 };
@@ -48,11 +49,12 @@ var PHD = {
     status: ['target', 'upcoming', 'done'] } },
   questions: { tab: 'PhD questions', prefix: 'pq-', need: 'question', choices: { status: ['open', 'answered'] } },
   contacts: { tab: 'PhD contacts', prefix: 'pp-', need: 'name', choices: {} },
+  links: { tab: 'PhD links', prefix: 'pl-', need: 'label', choices: {} },
   fellowships: { tab: 'PhD fellowships', prefix: 'pf-', need: 'name', choices: {
     status: ['to-start', 'in-progress', 'submitted', 'planned', 'idea', 'not-eligible', 'awarded', 'declined'] } },
   officeHours: { tab: 'Office hours', prefix: 'oh-', need: 'name', choices: { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } }
 };
-var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts', 'fellowships'];
+var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts', 'fellowships', 'links'];
 
 /* Settings. Each can be overridden in Project Settings > Script properties without editing code. */
 var DEFAULTS = {
@@ -1053,6 +1055,8 @@ function normalizeEvent(e, calendarName) {
   if (!link && e.conferenceData && e.conferenceData.entryPoints) {
     e.conferenceData.entryPoints.forEach(function (p) { if (p.entryPointType === 'video' && !link) link = p.uri; });
   }
+  // A Zoom link pasted into the description (common for recurring meetings); only the link is kept, never the description.
+  if (!link) { var z = /https:\/\/[\w.-]*zoom\.us\/j\/[^\s"'<>]+/.exec(String(e.description || '')); if (z) link = z[0]; }
   var allDay = !!e.start.date;
   return {
     id: 'g-' + String(e.id).slice(0, 60), calendar: calendarName, title: String(e.summary || '(No title)').slice(0, 300),

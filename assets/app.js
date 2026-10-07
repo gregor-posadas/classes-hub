@@ -729,6 +729,33 @@
     }).concat(due).sort(mSort);
   }
 
+
+  /* ---------- meetings with your advisor: the next 1:1s from your calendar, the shared notes doc, and your other PhD documents ---------- */
+  function meetingsHtml() {
+    var p = phd(), M = PHDCFG.meetings || {}, links = (p.links || []).slice().sort(byOrder), now = new Date();
+    if (!M.match && !links.length) return "";
+    var re = M.match ? new RegExp(M.match, "i") : null;
+    var evs = re ? gcal().events.filter(function (e) { return re.test(e.title) && evEnd(e) >= now; }).sort(function (a, b) { return evStart(a) - evStart(b); }) : [];
+    var notes = M.notesLink ? byId(links, M.notesLink) : null, notesUrl = notes ? safeUrl(notes.url) : "";
+    var whoRe = M.who ? new RegExp(M.who, "i") : null;
+    var qs = whoRe ? p.questions.filter(function (q) { return q.status !== "answered" && whoRe.test(q.who || ""); }) : [];
+    var next = evs[0], rest = evs.slice(1, 3);
+    var when = function (e) { var d = evStart(e), dn = dayNumber(d) - dayNumber(now); return (dn === 0 ? "Today" : dn === 1 ? "Tomorrow" : fmtLongDay(d)) + ", " + evWhen(e); };
+    var nextHtml = next ? '<div class="mtg"><p class="mtg__k">Next 1:1</p><p class="mtg__when">' + esc(when(next)) + "</p>" +
+        '<p class="mtg__act">' + (safeUrl(next.meetLink) ? '<a class="btn btn--sm" href="' + esc(asAccount(safeUrl(next.meetLink), eventAccount(next))) + '" target="_blank" rel="noopener">Join<span class="sr"> the meeting (opens in a new tab)</span></a> ' : "") +
+        (notesUrl ? '<a class="btn btn--sm btn--solid" href="' + esc(notesUrl) + '" target="_blank" rel="noopener">Open the meeting notes' + newTab() + "</a>" : "") + "</p>" +
+        (rest.length ? '<p class="mtg__more">Then ' + rest.map(function (e) { return esc(fmtDay(evStart(e))); }).join(" and ") + ".</p>" : "") + "</div>"
+      : '<div class="mtg"><p class="mtg__k">Next 1:1</p><p class="mtg__when">None on your calendar in the next six weeks.</p>' + (notesUrl ? '<p class="mtg__act"><a class="btn btn--sm btn--solid" href="' + esc(notesUrl) + '" target="_blank" rel="noopener">Open the meeting notes' + newTab() + "</a></p>" : "") + "</div>";
+    var qHtml = qs.length ? '<div class="mtg"><p class="mtg__k">Open questions for ' + esc(M.whoLabel || "your advisor") + ' in the hub</p><ul class="mtg__qs">' + qs.slice(0, 4).map(function (q) { return "<li>" + esc(q.question) + "</li>"; }).join("") + "</ul>" +
+      (qs.length > 4 ? '<p class="mtg__more"><a href="#pq-h" data-jump="pq-h">' + plural(qs.length - 4, "more") + "</a></p>" : "") + '<p class="mtg__more">Add the ones you want to raise to the meeting notes, which hold your own question list.</p></div>' : "";
+    var docs = links.length ? '<div class="mtg"><p class="mtg__k">PhD documents</p><ul class="docs">' + links.map(function (l) {
+      var u = safeUrl(l.url);
+      return "<li>" + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + newTab() + "</a>" : esc(l.label)) + (l.notes ? "<small>" + esc(l.notes) + "</small>" : "") +
+        ' <button type="button" class="linkbtn docs__edit" data-act="edit-phd" data-kind="links" data-id="' + esc(l.id) + '">Edit<span class="sr"> ' + esc(l.label) + "</span></button></li>";
+    }).join("") + '</ul><p class="mtg__more"><button type="button" class="linkbtn" data-act="new-phd" data-kind="links">Add a document</button></p></div>' : "";
+    return '<section class="section" aria-labelledby="mt-h"><h2 id="mt-h">' + esc(M.title || "Meetings with your advisor") + '</h2><div class="mtgs">' + nextHtml + qHtml + docs + "</div></section>";
+  }
+
   /* ---------- fellowships ---------- */
   var F_STATUS = { "to-start": "Not started", "in-progress": "In progress", submitted: "Submitted", planned: "Later cycle", idea: "Idea", "not-eligible": "Not eligible", awarded: "Awarded", declined: "Declined" };
   var F_SHAPE = { "to-start": "todo", "in-progress": "doing", submitted: "done", planned: "todo", idea: "todo", "not-eligible": "todo", awarded: "done", declined: "todo" };
@@ -838,13 +865,50 @@
     var minorRules = check(outside.length ? true : false, "At least one minor fully outside CEE", outside.length ? esc(outside.map(function (m) { return m.f.label; }).join(" and ")) + (outside.length > 1 ? " are." : " is.") : "Neither minor is outside CEE yet.") +
       check(envInMinor.length ? "warn" : true, "No environmental engineering courses in a minor", envInMinor.length ? "Move " + esc(envInMinor.map(function (c) { return c.code; }).join(", ")) + " out of the minor." : "CE 100 to 119, 173 and 200 to 219 can't go in a minor.");
 
-    // Designated Emphasis
-    var de = RULES.de || {}, active = p.courses.filter(counted);
+    var sources = (PHDCFG.sources || []).map(function (s) { return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + newTab() + "</a>"; }).join(", ");
+    return '<section class="section" aria-labelledby="rq-h"><h2 id="rq-h">CEE coursework</h2>' +
+      '<div class="ureq ureq--total">' + '<div class="ureq__head"><h3>' + totalNeed + ' units of coursework</h3><p class="ureq__note">Counted toward the Program of Study. Research units (CE 299) and ideas don\'t count.</p></div>' + unitBar(parts2, totalNeed, "All coursework") +
+      '<p class="ureq__sum">' + unitText(parts2, totalNeed) + "</p>" +
+      '<ul class="ukey" aria-label="Bar key"><li><i class="ubar__done"></i>Done</li><li><i class="ubar__doing"></i>In progress</li><li><i class="ubar__plan"></i>Planned</li></ul></div>' +
+      '<ul class="ureqs">' + rowsHtml + "</ul>" +
+      '<div class="rqcols"><div><h3 class="rq__h">Core areas</h3><ul class="rqs">' + core + '</ul></div><div><h3 class="rq__h">Minor rules</h3><ul class="rqs">' + minorRules + "</ul></div></div>" +
+      (sources ? '<p class="section__note">Rules from ' + sources + ". Check the GPA minimum and anything marked Check with your advisors.</p>" : "") + "</section>";
+  }
+
+
+  /* ---------- the Development Engineering DE: five courses plus a few steps, tracked on their own ---------- */
+  function deState() {
+    var p = phd(), de = RULES.de || {}, active = p.courses.filter(counted), need = de.electives || 3;
+    var rank = { done: 0, "in-progress": 1, planned: 2 };
+    var slots = (de.core || []).map(function (code, i) {
+      var hit = active.filter(function (c) { return c.de === "core" && String(c.code).replace(/\s+/g, " ").toUpperCase() === code.toUpperCase(); }).sort(function (a, b) { return rank[a.status] - rank[b.status]; })[0];
+      return { kind: "Core " + (i + 1), code: code, course: hit || null };
+    });
+    var electives = active.filter(function (c) { return /^(m1|m2|m3|petition)$/.test(c.de); }).sort(function (a, b) { return (rank[a.status] - rank[b.status]) || byOrder(a, b); });
+    for (var i = 0; i < Math.max(need, electives.length); i++) slots.push({ kind: "Elective " + (i + 1), code: "", course: electives[i] || null });
+    var n = { done: 0, doing: 0, planned: 0, open: 0 };
+    slots.forEach(function (sl) { var st = sl.course ? sl.course.status : ""; n[st === "done" ? "done" : st === "in-progress" ? "doing" : st === "planned" ? "planned" : "open"]++; });
+    return { slots: slots, n: n, total: slots.length, electives: electives, active: active };
+  }
+  function deBar(st, big) {
+    var said = "Designated Emphasis courses: " + st.n.done + " done, " + st.n.doing + " in progress, " + st.n.planned + " planned, " + st.n.open + " still to pick, of " + st.total + ".";
+    return '<div class="debar' + (big ? " debar--big" : "") + '" role="img" aria-label="' + esc(said) + '">' + st.slots.map(function (sl) {
+      var s2 = sl.course ? sl.course.status : "";
+      return '<i class="debar__slot ' + (s2 === "done" ? "ubar__done" : s2 === "in-progress" ? "ubar__doing" : s2 === "planned" ? "ubar__plan" : "is-open") + '"></i>';
+    }).join("") + "</div>";
+  }
+  function deMeter() {
+    if (!phd()) return "";
+    var st = deState(), pct = Math.round(100 * st.n.done / st.total);
+    return '<div class="meter meter--de" tabindex="0" data-peek="m:prog-de"><p class="meter__label" id="prog-de"><b>' + st.n.done + " of " + st.total + '</b> <span class="meter__term">Designated Emphasis courses done</span></p>' + deBar(st) +
+      '<p class="meter__meta">' + st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : "") + ".</p></div>";
+  }
+  function deSectionHtml() {
+    var p = phd(), de = RULES.de || {}, st = deState(), modNames = de.modules || {};
+    var electives = st.electives, active = st.active;
     var deCore = active.filter(function (c) { return c.de === "core"; });
-    var electives = active.filter(function (c) { return /^(m1|m2|m3|petition)$/.test(c.de); });
     var mods = {}; electives.forEach(function (c) { if (c.de !== "petition") mods[c.de] = true; });
     var home = electives.filter(isCEE), petitions = electives.filter(function (c) { return c.de === "petition"; });
-    var modNames = de.modules || {};
     var deHtml = (de.core || []).map(function (code) {
       var hit = deCore.filter(function (c) { return String(c.code).replace(/\s+/g, " ").toUpperCase() === code.toUpperCase(); });
       return check(hit.length ? bestStatus(hit) : false, hit.length ? hit.map(courseRef).join(", ") : "<b>" + esc(code) + "</b>", hit.length ? (hit[0].title ? esc(hit[0].title) : "") : "Core course, not on your plan yet.");
@@ -859,15 +923,26 @@
         return check(both.length ? "warn" : true, "DE courses kept out of the minors", both.length ? esc(both.map(function (c) { return c.code; }).join(", ")) + " counts for both. Pick one." : "Your choice, so the DE stands on its own.");
       })() : "");
 
-    var sources = (PHDCFG.sources || []).map(function (s) { return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + newTab() + "</a>"; }).join(", ");
-    return '<section class="section" aria-labelledby="rq-h"><h2 id="rq-h">Requirements</h2>' +
-      '<div class="ureq ureq--total">' + '<div class="ureq__head"><h3>' + totalNeed + ' units of coursework</h3><p class="ureq__note">Counted toward the Program of Study. Research units (CE 299) and ideas don\'t count.</p></div>' + unitBar(parts2, totalNeed, "All coursework") +
-      '<p class="ureq__sum">' + unitText(parts2, totalNeed) + "</p>" +
-      '<ul class="ukey" aria-label="Bar key"><li><i class="ubar__done"></i>Done</li><li><i class="ubar__doing"></i>In progress</li><li><i class="ubar__plan"></i>Planned</li></ul></div>' +
-      '<ul class="ureqs">' + rowsHtml + "</ul>" +
-      '<div class="rqcols"><div><h3 class="rq__h">Core areas</h3><ul class="rqs">' + core + '</ul><h3 class="rq__h">Minor rules</h3><ul class="rqs">' + minorRules + "</ul></div>" +
-      '<div><h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + '</h3><ul class="rqs">' + deHtml + "</ul></div></div>" +
-      (sources ? '<p class="section__note">Rules from ' + sources + ". Check the GPA minimum and anything marked Check with your advisors.</p>" : "") + "</section>";
+
+    var slotHtml = st.slots.map(function (sl) {
+      var c = sl.course, s2 = c ? c.status : "";
+      var key = s2 === "done" ? "done" : s2 === "in-progress" ? "doing" : "todo";
+      return '<li class="deslot' + (c ? "" : " is-open") + '"><span class="deslot__k">' + esc(sl.kind) + "</span>" +
+        (c ? '<span class="deslot__c" tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<span class="deslot__t">' + esc(c.title) + "</span>" : "") +
+          '<span class="st deslot__st">' + shape(key) + esc(C_STATUS[s2] || s2) + (c.term ? ", " + esc(c.term) : "") + "</span>" +
+          (sl.kind.indexOf("Elective") === 0 ? '<span class="deslot__m">' + esc(c.de === "petition" ? "By petition" : modNames[c.de] || "") + "</span>" : "")
+          : '<span class="deslot__c">' + esc(sl.code || "Not picked yet") + '</span><span class="deslot__t">' + (sl.code ? "Not on your plan yet" : "Any course on the DE list. See Options below.") + "</span>") + "</li>";
+    }).join("");
+    var steps = (de.steps || []).map(function (stp) {
+      var m = stp.milestone ? byId(p.milestones, stp.milestone) : null;
+      var ok = m ? (m.status === "done" ? true : false) : stp.auto === "c200" ? bestStatus(active.filter(function (c) { return c.de === "core" && /C200/i.test(c.code); })) : false;
+      return check(ok, esc(stp.label), esc(stp.note || ""));
+    }).join("");
+    return '<section class="section" aria-labelledby="de-h"><h2 id="de-h">' + esc(de.label || "Designated Emphasis") + "</h2>" +
+      '<div class="ureq ureq--total"><div class="ureq__head"><h3>' + st.total + ' courses: ' + (de.core || []).length + ' core and ' + (de.electives || 3) + ' electives</h3><p class="ureq__note">On top of the CEE coursework, kept out of your minors.</p></div>' + deBar(st, true) +
+      '<p class="ureq__sum"><b>' + st.n.done + "</b> done, <b>" + st.n.doing + "</b> in progress, <b>" + st.n.planned + "</b> planned" + (st.n.open ? '. <span class="ureq__gap">' + plural(st.n.open, "course") + " still to pick.</span>" : ".") + "</p></div>" +
+      '<ol class="deslots">' + slotHtml + "</ol>" +
+      '<div class="rqcols"><div><h3 class="rq__h">Course rules</h3><ul class="rqs">' + deHtml + '</ul></div><div><h3 class="rq__h">Other steps</h3><ul class="rqs">' + steps + "</ul></div></div></section>";
   }
 
   function timelineHtml() {
@@ -977,10 +1052,10 @@
       return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span class=\"nexts__t\" tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
     }).join("") + "</ul>" : '<p class="empty">Nothing coming up on the timeline.</p>';
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>' + esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".</p></div>" +
-      '<div class="phdbar">' + phdMeter() + "</div>" +
+      '<div class="phdbar">' + phdMeter() + deMeter() + "</div>" +
       '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Coming up</h2>' + nextHtml +
       (openQ ? '<p class="section__note"><a href="#pq-h" data-jump="pq-h">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
-      fellowshipsHtml() + requirementsHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
+      meetingsHtml() + fellowshipsHtml() + requirementsHtml() + deSectionHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
       '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p></div>';
   }
 
@@ -1015,6 +1090,8 @@
       ["answer", "What you know so far", "textarea"], ["asked", "Asked on", "date", { half: 1 }], ["link", "Link to the email", "url", { half: 2 }]] },
     contacts: { title: ["Add a person", "Edit person"], what: "person", fields: [
       ["name", "Name", "text", { required: true }], ["role", "Role", "text"], ["email", "Email", "email", { half: 1 }], ["group", "Group", "text", { half: 2, hint: "For example CEE or DevEng." }]] },
+    links: { title: ["Add a document", "Edit document"], what: "document", fields: [
+      ["label", "Name", "text", { required: true }], ["url", "Link", "url", { required: true }], ["notes", "Note", "text"]] },
     fellowships: { title: ["Add a fellowship", "Edit fellowship"], what: "fellowship", fields: [
       ["name", "Fellowship", "text", { required: true }], ["sponsor", "Sponsor", "text"],
       ["status", "Status", "select", { half: 1, opts: function () { return Object.keys(F_STATUS).map(function (k) { return [k, F_STATUS[k]]; }); } }],
@@ -1050,7 +1127,7 @@
     var row = Object.assign({}, existing || {}, v);
     if (!existing) row.id = "";
     return apiPost({ action: "saveRecord", kind: kind, row: row }).then(function (r) {
-      var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh" }[kind]) });
+      var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh", fellowships: "pf", links: "pl" }[kind]) });
       var list = recList(kind), i = list.findIndex(function (x) { return x.id === saved.id; });
       if (i > -1) list[i] = saved; else list.push(saved);
       refresh(); toast((existing ? "Saved" : "Added") + (r.demo ? " (demo, not saved)" : ""));
@@ -1584,6 +1661,8 @@
           "In-class or on-paper work is left out until it's graded or you mark it Done, since bCourses can't tell whether you did it."],
         "prog-phd": ["Your time at Berkeley", "Days since you started (" + fmtDay(phdTime().start, true) + ") out of the days until " + (PHDCFG.expected || "graduation") + ". The end is approximate: the middle of May 2031. Change it in config.js if your plan moves.",
           "Year " + phdTime().year + " of " + phdTime().years + ". It moves a little every day."],
+        "prog-de": ["Your Designated Emphasis", "The five Development Engineering courses: DevEng C200 and DevEng 210, plus three electives from at least two modules. Each block is one course: solid green is done, blue is in progress, striped is planned, empty is still to pick.",
+          "The percentage counts finished courses only."],
         "prog-week": ["How this week is going", "Everything due Monday through Sunday of this week, from every course, and how much of it is done. It starts over every Monday.",
           "Work due later this week counts as soon as you finish it early."]
       }[id];
@@ -1706,7 +1785,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007033323";
+  var BUILD = "20261007041657";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
