@@ -1313,7 +1313,8 @@
     else {
       var ys = seen.map(function (x) { return x.y; }).sort();
       var gaps = ys.slice(1).map(function (y, i) { return y - ys[i]; });
-      if (gaps.length && gaps.every(function (g) { return g === 2; })) { alt = ys[0] % 2; word = "Every other " + seasons[0].toLowerCase() + " (" + (alt ? "odd" : "even") + " years)"; }
+      if (gaps.length > 1 && gaps.every(function (g) { return g === 2; })) { alt = ys[0] % 2; word = "Every other " + seasons[0].toLowerCase() + " (" + (alt ? "odd" : "even") + " years)"; }
+      else if (gaps.some(function (g) { return g > 1; })) word = seasons[0] + " only, and not every year";
       else word = seasons[0] + " only";
     }
     return { word: word, raw: raw, seen: seen, ok: function (term) {
@@ -2501,7 +2502,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007094200";
+  var BUILD = "20261007100130";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
