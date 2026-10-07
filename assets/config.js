@@ -47,7 +47,9 @@ window.CH_CONFIG = {
           { label: "A DevEng Graduate Group member on your dissertation committee", ok: "doing", note: "Covered by your advisor, the DevEng chair." },
           { label: "Development engineering themes in the dissertation", note: "For example, technology for economic and social development." }
         ],
-        modules: { m1: "Module 1, project design", m2: "Module 2, evaluation and social impact", m3: "Module 3, technology development" }
+        modules: { m1: "Module 1, project design", m2: "Module 2, evaluation and social impact", m3: "Module 3, technology development" },
+        // Courses the DE list puts in more than one module, and the module a petition is aiming for.
+        moduleMap: { "DEVENG 203": ["m2", "m3"], "CIVENG 282": ["m1"] }
       }
     },
     sources: [

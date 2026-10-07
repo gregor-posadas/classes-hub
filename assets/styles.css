@@ -768,8 +768,7 @@ a.evt__title:hover { text-decoration: underline; }
 .meter--phd .meter__bar i { background: var(--phd); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --phd: #e88a8a; } }
 :root[data-theme="dark"] { --phd: #e88a8a; }
-.phdbar { display: grid; gap: 16px 40px; margin: -8px 0 24px; }
-@media (min-width: 720px) { .phdbar { grid-template-columns: 1fr 1fr; } }
+.phdbar { margin: -8px 0 24px; }
 .phdbar .meter__label b { font-size: var(--f4); }
 .ftbl td small { display: block; color: var(--ink-2); font-size: var(--f1); font-weight: 400; }
 .ftbl td small.fdue--soon { color: var(--ink); font-weight: 700; }
@@ -876,3 +875,48 @@ a.evt__title:hover { text-decoration: underline; }
 .padd .field { margin: 8px 0; }
 .padd .two { grid-template-columns: minmax(0, 1fr) 5rem; gap: 8px; }
 .padd input, .padd select { width: 100%; box-sizing: border-box; min-width: 0; }
+
+/* ---------- five years at Berkeley, with milestones on top ---------- */
+.meter--phd .meter__bar { position: relative; }
+.phdbar .meter__bar { height: 20px; }
+.pl-ms { position: relative; margin-top: 4px; }
+.pl-m { position: absolute; bottom: 6px; border-left: 2px solid var(--ink-2); padding-left: 6px; white-space: nowrap; }
+.pl-m--r { border-left: 0; border-right: 2px solid var(--ink-2); padding: 0 6px 0 0; transform: translateX(-100%); }
+.pl-m__t { display: block; margin-top: -3px; font-size: var(--f1); font-weight: 700; line-height: 1.2; background: var(--paper); }
+.pl-m--exam .pl-m__t { color: var(--phd); }
+.pl-m.is-done .pl-m__t { color: var(--ink-2); font-weight: 400; }
+.pl-d { position: absolute; bottom: 0; width: 12px; height: 12px; margin-left: -6px; border: 2px solid var(--ink-2); border-radius: 50%; background: var(--paper); box-sizing: border-box; }
+.pl-d.is-done { background: var(--ink-2); }
+.pl-d--exam { border-radius: 0; transform: rotate(45deg) scale(1.1); border-color: var(--phd); }
+.pl-d--exam.is-done { background: var(--phd); }
+.pl-now { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1.5px; background: var(--ink); }
+.pl-ys { position: relative; height: 1.5em; margin-top: 4px; font-size: var(--f1); color: var(--ink-2); }
+.pl-y { position: absolute; top: 0; padding-left: 6px; border-left: 2px solid var(--rule-strong); white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+.pl-y.is-now { color: var(--ink); font-weight: 700; }
+@media (max-width: 899px) { .pl-m { display: none; } .pl-ms { height: 14px !important; } }
+.pl-more { margin-top: 12px; }
+.pl-more summary { cursor: pointer; font-weight: 700; }
+.pl-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 0 32px; }
+@media (min-width: 720px) { .pl-list { grid-template-columns: 1fr 1fr; } }
+.pl-list li { display: grid; grid-template-columns: 8.5rem auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 5px 0; border-bottom: 1px solid var(--rule); font-size: var(--f1); }
+.pl-list li.is-done { color: var(--ink-2); }
+.pl-list__w { font-weight: 700; }
+
+/* ---------- DE bar with the modules drawn faintly under the electives ---------- */
+.debarg { display: grid; gap: 4px; row-gap: 4px; }
+.debarg .debar__slot { height: 18px; box-sizing: border-box; }
+.debarg__k { font-size: var(--f1); color: var(--ink-2); font-weight: 700; }
+.debarg__k--m { font-weight: 400; }
+.demods { display: flex; gap: 4px; padding: 4px; border: 2px dashed var(--rule); border-radius: 2px; }
+.demod { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 2px 4px; font-size: var(--f1); font-weight: 700; color: var(--ink-2); border: 1px dashed var(--rule-strong); opacity: .75; white-space: nowrap; overflow: hidden; }
+.demod.is-done, .demod.is-doing { opacity: 1; color: var(--ink); border-style: solid; }
+.demod.is-pet, .demod.is-plan { opacity: .9; color: var(--ink); }
+.demod .st__shape { width: 14px; height: 14px; flex: none; }
+.demodcards { margin-top: 20px; }
+.demodcards ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.demodc { display: grid; gap: 4px; align-content: start; padding: 12px; border: 2px dashed var(--rule-strong); min-width: 0; }
+.demodc.is-open, .demodc.is-spare { opacity: .8; border-color: var(--rule); }
+.demodc.is-done, .demodc.is-doing { border-style: solid; }
+.demodc__k { font-weight: 700; overflow-wrap: anywhere; }
+.demodc .st, .demodc small { font-size: var(--f1); }
+.demodc small { color: var(--ink-2); overflow-wrap: anywhere; }

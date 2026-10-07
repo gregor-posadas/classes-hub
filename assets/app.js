@@ -803,9 +803,53 @@
     var yr = Math.max(1, Math.min(years, Math.floor((termNow() - (first * 3 + 2)) / 3) + 1));
     return { start: s, end: e, pct: pct, year: yr, years: years, left: Math.max(0, dayNumber(e) - dayNumber(now)) };
   }
-  function phdMeter() {
-    var t = phdTime(), total = dayNumber(t.end) - dayNumber(t.start) + 1, day = Math.max(0, Math.min(total, dayNumber(new Date()) - dayNumber(t.start) + 1));
-    return meter("prog-phd", "of your time at Berkeley", t.pct, "Day " + day.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + ". " + t.left.toLocaleString("en-US") + " days to graduation (about " + Math.round(t.left / 7) + " weeks), " + esc(PHDCFG.expected || fmtDay(t.end, true)) + ". Year " + t.year + " of " + t.years + ".", "meter--phd");
+  /* Where a milestone sits on the five-year bar: its date, or the middle of its term. */
+  function msDay(m) {
+    if (m.date) return dayFromIso(m.date);
+    var k = mTerm(m); if (isNaN(k)) return NaN;
+    return dayFromIso(Math.floor(k / 3) + ["-03-15", "-07-01", "-10-15"][k % 3]);
+  }
+  var PL_LABEL = { exam: 1, fieldwork: 1, funding: 1 };
+  function phdMeter(full) {
+    var t = phdTime(), d0 = dayNumber(t.start), d1 = dayNumber(t.end), total = d1 - d0 + 1, day = Math.max(0, Math.min(total, dayNumber(new Date()) - d0 + 1));
+    var meta = "Day " + day.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + ". " + t.left.toLocaleString("en-US") + " days to graduation (about " + Math.round(t.left / 7) + " weeks), " + esc(PHDCFG.expected || fmtDay(t.end, true)) + ". Year " + t.year + " of " + t.years + ".";
+    if (!full) return meter("prog-phd", "of your time at Berkeley", t.pct, meta, "meter--phd");
+    var pos = function (d) { return Math.max(0, Math.min(100, 100 * (d - d0) / (d1 - d0))); };
+    var ms = (phd().milestones || []).filter(function (m) { var d = msDay(m); return !isNaN(d) && d >= d0 && d <= d1 + 60; }).sort(function (a, b) { return msDay(a) - msDay(b); });
+    // Labels for the big ones (exams, fieldwork, funding), stacked in up to 3 lanes so they don't run into each other.
+    var lanes = [], labelled = [];
+    // Placed right to left, so a label's line never runs through a label in a lower lane.
+    ms.slice().reverse().forEach(function (m) {
+      if (!PL_LABEL[m.category]) return;
+      var x = pos(msDay(m)), text = String(m.title).split(/,| then /)[0], w = 1.5 + text.length * 0.9, right = x > 62;
+      var a = right ? x - w : x, b = right ? x : x + w;
+      for (var L = 0; L < 4; L++) {
+        var ok = (lanes[L] || []).every(function (iv) { return b < iv[0] - 1 || a > iv[1] + 1; });
+        for (var l = 0; l < L && ok; l++) ok = (lanes[l] || []).every(function (iv) { return x < iv[0] - 0.5 || x > iv[1] + 0.5; });
+        if (ok) { (lanes[L] = lanes[L] || []).push([a, b]); labelled.push({ m: m, x: x, text: text, lane: L, right: right }); return; }
+      }
+    });
+    var nLanes = labelled.reduce(function (n, l) { return Math.max(n, l.lane + 1); }, 0);
+    var marks = labelled.map(function (l) {
+      return '<span class="pl-m pl-m--' + esc(l.m.category) + (l.right ? " pl-m--r" : "") + (l.m.status === "done" ? " is-done" : "") + '" style="left:' + l.x.toFixed(2) + "%;height:" + (l.lane * 26 + 24) + 'px"><span class="pl-m__t">' + esc(l.text) + "</span></span>";
+    }).join("");
+    var dots = ms.map(function (m) {
+      return '<i class="pl-d pl-d--' + esc(m.category) + (m.status === "done" ? " is-done" : "") + '" style="left:' + pos(msDay(m)).toFixed(2) + '%"></i>';
+    }).join("");
+    var yrs = "", sMd = String(PHDCFG.start || "2026-08-26").slice(4);
+    for (var y = 0; y < t.years; y++) {
+      var a2 = pos(dayFromIso(((PHDCFG.firstYear || 2026) + y) + sMd)), b2 = y + 1 < t.years ? pos(dayFromIso(((PHDCFG.firstYear || 2026) + y + 1) + sMd)) : 100;
+      yrs += '<span class="pl-y' + (y + 1 === t.year ? " is-now" : "") + '" style="left:' + a2.toFixed(2) + "%;width:" + (b2 - a2).toFixed(2) + '%">Year ' + (y + 1) + "</span>";
+    }
+    var list = '<ol class="pl-list">' + ms.map(function (m) {
+      return '<li class="' + (m.status === "done" ? "is-done" : "") + '"><span class="pl-list__w">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
+    }).join("") + "</ol>";
+    return '<div class="meter meter--phd" tabindex="0" data-peek="m:prog-phd"><p class="meter__label" id="prog-phd"><b>' + t.pct + '%</b> <span class="meter__term">of your time at Berkeley</span></p>' +
+      '<div class="pl" aria-hidden="true"><div class="pl-ms" style="height:' + (nLanes ? nLanes * 26 + 26 : 12) + 'px">' + marks + dots + "</div></div>" +
+      '<div class="meter__bar" role="progressbar" aria-labelledby="prog-phd" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + t.pct + '"><i style="width:' + t.pct + '%"></i><b class="pl-now" style="left:' + t.pct + '%"></b></div>' +
+      '<div class="pl-ys" aria-hidden="true">' + yrs + "</div>" +
+      '<p class="meter__meta">' + meta + "</p></div>" +
+      '<details class="pl-more"><summary>Milestones along the way (' + ms.length + ")</summary>" + list + '<p class="section__note"><a href="#/phd/timeline">The full timeline</a>, by year and term.</p></details>';
   }
 
   function isCEE(c) { return /^(CIVENG|CE)\b/i.test(String(c.code || "").trim()); }
@@ -893,12 +937,59 @@
     slots.forEach(function (sl) { var st = sl.course ? sl.course.status : ""; n[st === "done" ? "done" : st === "in-progress" ? "doing" : st === "planned" ? "planned" : "open"]++; });
     return { slots: slots, n: n, total: slots.length, electives: electives, active: active };
   }
-  function deBar(st, big) {
+  function deBar(st, big, md) {
     var said = "Designated Emphasis courses: " + st.n.done + " done, " + st.n.doing + " in progress, " + st.n.planned + " planned, " + st.n.open + " still to pick, of " + st.total + ".";
-    return '<div class="debar' + (big ? " debar--big" : "") + '" role="img" aria-label="' + esc(said) + '">' + st.slots.map(function (sl) {
+    var slots = st.slots.map(function (sl) {
       var s2 = sl.course ? sl.course.status : "";
       return '<i class="debar__slot ' + (s2 === "done" ? "ubar__done" : s2 === "in-progress" ? "ubar__doing" : s2 === "planned" ? "ubar__plan" : "is-open") + '"></i>';
-    }).join("") + "</div>";
+    }).join("");
+    if (!md) return '<div class="debar' + (big ? " debar--big" : "") + '" role="img" aria-label="' + esc(said) + '">' + slots + "</div>";
+    // The big bar, with the modules drawn faintly under the elective slots they come from.
+    var core = ((RULES.de || {}).core || []).length, need = (RULES.de || {}).minModules || 2;
+    said += " Modules: " + md.n + " of the " + need + " needed" + (md.n > md.firm ? ", counting a petition" : "") + ".";
+    return '<div class="debarg" role="img" aria-label="' + esc(said) + '" style="grid-template-columns:repeat(' + st.total + ',minmax(0,1fr))">' +
+      '<span class="debarg__k" style="grid-column:1 / ' + (core + 1) + '" aria-hidden="true">Core</span><span class="debarg__k" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">Electives</span>' +
+      slots + '<span class="demods" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">' + md.mods.map(function (m) {
+        return '<span class="demod is-' + m.state + '">' + shape(m.shape) + "M" + esc(m.key.slice(1)) + "</span>";
+      }).join("") + '</span><span class="debarg__k debarg__k--m" style="grid-column:' + (core + 1) + ' / -1" aria-hidden="true">Modules: need ' + need + " of " + md.mods.length + "</span></div>";
+  }
+  function codeKey(c) { return String(c && c.code !== undefined ? c.code : c || "").replace(/\s+/g, " ").trim().toUpperCase(); }
+  /* Which modules an elective can count for: the DE list (config) first, otherwise the module picked for it. */
+  function modsOf(c) {
+    var m = ((RULES.de || {}).moduleMap || {})[codeKey(c)];
+    if (m && m.length) return m.slice();
+    return /^m[123]$/.test(c.de) ? [c.de] : [];
+  }
+  /* Each elective covers one module, so find the pairing that covers the most modules (preferring approved courses over petitions). */
+  function deModules(electives) {
+    var names = (RULES.de || {}).modules || { m1: "Module 1", m2: "Module 2", m3: "Module 3" }, keys = Object.keys(names);
+    var best = { n: 0, firm: 0, pick: {} };
+    (function go(i, pick, firm) {
+      var n = Object.keys(pick).length;
+      if (n > best.n || (n === best.n && firm > best.firm)) best = { n: n, firm: firm, pick: Object.assign({}, pick) };
+      if (i >= electives.length) return;
+      var c = electives[i];
+      go(i + 1, pick, firm);
+      modsOf(c).forEach(function (k) { if (pick[k]) return; pick[k] = c; go(i + 1, pick, firm + (c.de === "petition" ? 0 : 1)); delete pick[k]; });
+    })(0, {}, 0);
+    var mods = keys.map(function (k) {
+      var c = best.pick[k] || null, all = electives.filter(function (e) { return modsOf(e).indexOf(k) >= 0; });
+      var state = !c ? (all.length ? "spare" : "open") : c.de === "petition" ? "pet" : c.status === "done" ? "done" : c.status === "in-progress" ? "doing" : "plan";
+      var shp = { done: "done", doing: "doing", pet: "soon", plan: "todo", spare: "todo", open: "todo" }[state];
+      var word = { done: "Met", doing: "On track", pet: "If the petition is approved", plan: "Planned", spare: "Not needed", open: "Open" }[state];
+      return { key: k, name: names[k], course: c, all: all, state: state, shape: shp, word: word };
+    });
+    var met = mods.filter(function (m) { return m.state === "done"; }).length;
+    return { mods: mods, n: best.n, firm: best.firm, ok: met >= ((RULES.de || {}).minModules || 2) ? true : best.n >= ((RULES.de || {}).minModules || 2) ? "doing" : false };
+  }
+  function deModulesHtml(md) {
+    var need = (RULES.de || {}).minModules || 2;
+    return '<div class="demodcards"><h3 class="rq__h">Modules: electives from at least ' + need + " of " + md.mods.length + '</h3><p class="section__note">Each elective counts toward one module. The faint boxes show which module each of your electives is covering.</p><ul>' + md.mods.map(function (m) {
+      var c = m.course, others = m.all.filter(function (e) { return e !== c; });
+      return '<li class="demodc is-' + m.state + '"><span class="demodc__k">' + esc(m.name) + '</span><span class="st">' + shape(m.shape) + esc(m.word) + "</span>" +
+        (c ? '<span class="demodc__c">' + courseRef(c) + (c.de === "petition" ? " by petition" : "") + "</span>" : "") +
+        (others.length ? '<small>' + (c ? "Also on the list here: " : "Could count here, but already covering another module: ") + others.map(function (e) { return esc(e.code); }).join(", ") + "</small>" : !c ? "<small>No elective here yet.</small>" : "") + "</li>";
+    }).join("") + "</ul></div>";
   }
   function deMeter() {
     if (!phd()) return "";
@@ -910,7 +1001,7 @@
     var p = phd(), de = RULES.de || {}, st = deState(), modNames = de.modules || {};
     var electives = st.electives, active = st.active;
     var deCore = active.filter(function (c) { return c.de === "core"; });
-    var mods = {}; electives.forEach(function (c) { if (c.de !== "petition") mods[c.de] = true; });
+    var md = deModules(electives), needM = de.minModules || 2;
     var home = electives.filter(isCEE), petitions = electives.filter(function (c) { return c.de === "petition"; });
     var deHtml = (de.core || []).map(function (code) {
       var hit = deCore.filter(function (c) { return String(c.code).replace(/\s+/g, " ").toUpperCase() === code.toUpperCase(); });
@@ -919,7 +1010,8 @@
       check(electives.length >= (de.electives || 3) ? (petitions.length ? "doing" : bestStatus(electives) === true && electives.every(function (c) { return c.status === "done"; }) ? true : "doing") : false,
         "<b>" + (de.electives || 3) + " electives</b>: " + (electives.length ? electives.map(function (c) { return courseRef(c) + ", " + esc(c.de === "petition" ? "by petition" : (modNames[c.de] || c.de)); }).join("; ") : "none yet"),
         (electives.length < (de.electives || 3) ? plural((de.electives || 3) - electives.length, "more elective") + " to pick. " : "") + (petitions.length ? "A petition counts only once approved." : "")) +
-      check(Object.keys(mods).length >= (de.minModules || 2) ? true : false, "Electives from at least " + (de.minModules || 2) + " of the 3 modules", Object.keys(mods).length ? "So far: " + esc(Object.keys(mods).sort().map(function (k) { return modNames[k] || k; }).join(", ")) + "." : "No module covered yet.") +
+      check(md.ok, "Electives from at least " + needM + " of the " + md.mods.length + " modules",
+        md.n ? "So far: " + md.mods.filter(function (m) { return m.course; }).map(function (m) { return esc(m.name) + " (" + esc(m.course.code) + (m.state === "pet" ? ", by petition" : "") + ")"; }).join(", ") + "." : "No module covered yet.") +
       check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " elective from your home department (CEE)", home.length ? esc(home.map(function (c) { return c.code; }).join(", ")) + "." : "") +
       (de.separateFromMinors ? (function () {
         var both = active.filter(function (c) { return c.de && /^minor/.test(c.field); });
@@ -933,7 +1025,10 @@
       return '<li class="deslot' + (c ? "" : " is-open") + '"><span class="deslot__k">' + esc(sl.kind) + "</span>" +
         (c ? '<span class="deslot__c" tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<span class="deslot__t">' + esc(c.title) + "</span>" : "") +
           '<span class="st deslot__st">' + shape(key) + esc(C_STATUS[s2] || s2) + (c.term ? ", " + esc(c.term) : "") + "</span>" +
-          (sl.kind.indexOf("Elective") === 0 ? '<span class="deslot__m">' + esc(c.de === "petition" ? "By petition" : modNames[c.de] || "") + "</span>" : "")
+          (sl.kind.indexOf("Elective") === 0 ? (function () {
+            var on = md.mods.filter(function (m) { return m.course === c; })[0];
+            return '<span class="deslot__m">' + esc(on ? "Covers " + on.name + (c.de === "petition" ? ", by petition" : "") : c.de === "petition" ? "By petition" : modNames[c.de] || "") + "</span>";
+          })() : "")
           : '<span class="deslot__c">' + esc(sl.code || "Not picked yet") + '</span><span class="deslot__t">' + (sl.code ? "Not on your plan yet" : "Any course on the DE list. See Elective options below.") + "</span>") + "</li>";
     }).join("");
     var steps = (de.steps || []).map(function (stp) {
@@ -942,9 +1037,10 @@
       return check(ok, esc(stp.label), esc(stp.note || ""));
     }).join("");
     return '<section class="section" aria-labelledby="de-h"><h2 id="de-h">' + esc(de.label || "Designated Emphasis") + "</h2>" +
-      '<div class="ureq ureq--total"><div class="ureq__head"><h3>' + st.total + ' courses: ' + (de.core || []).length + ' core and ' + (de.electives || 3) + ' electives</h3><p class="ureq__note">On top of the CEE coursework, kept out of your minors.</p></div>' + deBar(st, true) +
-      '<p class="ureq__sum"><b>' + st.n.done + "</b> done, <b>" + st.n.doing + "</b> in progress, <b>" + st.n.planned + "</b> planned" + (st.n.open ? '. <span class="ureq__gap">' + plural(st.n.open, "course") + " still to pick.</span>" : ".") + "</p></div>" +
-      '<ol class="deslots">' + slotHtml + "</ol>" +
+      '<div class="ureq ureq--total"><div class="ureq__head"><h3>' + st.total + ' courses: ' + (de.core || []).length + ' core and ' + (de.electives || 3) + ' electives</h3><p class="ureq__note">On top of the CEE coursework, kept out of your minors.</p></div>' + deBar(st, true, md) +
+      '<p class="ureq__sum"><b>' + st.n.done + "</b> done, <b>" + st.n.doing + "</b> in progress, <b>" + st.n.planned + "</b> planned" + (st.n.open ? '. <span class="ureq__gap">' + plural(st.n.open, "course") + " still to pick.</span>" : ".") +
+      " Modules: <b>" + md.n + " of " + needM + "</b> covered" + (md.n > md.firm ? ", counting a petition" : "") + ".</p></div>" +
+      '<ol class="deslots">' + slotHtml + "</ol>" + deModulesHtml(md) +
       '<div class="rqcols"><div><h3 class="rq__h">Course rules</h3><ul class="rqs">' + deHtml + '</ul></div><div><h3 class="rq__h">Other steps</h3><ul class="rqs">' + steps + "</ul></div></div></section>";
   }
 
@@ -1077,7 +1173,7 @@
       return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span class=\"nexts__t\" tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
     }).join("") + "</ul>" : '<p class="empty">Nothing coming up on the timeline.</p>';
     return '<div class="wrap">' + phdHead("", esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".") +
-      '<div class="phdbar">' + phdMeter() + "</div>" +
+      '<div class="phdbar">' + phdMeter(true) + "</div>" +
       '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Coming up</h2>' + nextHtml +
       (openQ ? '<p class="section__note"><a href="#/phd/people">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
       meetingsHtml() + phdCards() + foot + "</div>";
@@ -1225,16 +1321,15 @@
         var hit = p.courses.filter(function (c) { return c.core === a.key && counted(c); });
         return check(hit.length ? bestStatus(hit) || "doing" : false, "<b>" + esc(a.label) + "</b>" + (hit.length ? ": " + esc(hit.map(function (c) { return c.code; }).join(", ")) : ""), hit.length ? "" : "No course yet.");
       }).join("");
-      var st = deState(), de = RULES.de || {}, el = st.electives, mods = {};
-      el.forEach(function (c) { if (c.de !== "petition") mods[c.de] = true; });
+      var st = deState(), de = RULES.de || {}, el = st.electives, md = deModules(el), needM = de.minModules || 2;
       var home = el.filter(isCEE), both = st.active.filter(function (c) { return c.de && /^minor/.test(c.field); });
       var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
-        check(Object.keys(mods).length >= (de.minModules || 2) ? true : false, "Electives from " + (de.minModules || 2) + " modules", "") +
+        check(md.ok, "Electives from " + needM + " modules", md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1) + " " + m.course.code + (m.state === "pet" ? " (petition)" : ""); }).join(", ")) : "") +
         check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " CEE elective", home.length > (de.maxHome || 1) ? esc(home.map(function (c) { return c.code; }).join(", ")) : "") +
         (de.separateFromMinors ? check(both.length ? "warn" : true, "DE kept out of the minors", both.length ? esc(both.map(function (c) { return c.code; }).join(", ")) : "") : "");
       out = '<h3 class="rq__h">' + need + " units of coursework</h3>" + unitBar(tot, need, "All coursework") + '<p class="ureq__sum">' + unitText(tot, need) + "</p>" +
         '<ul class="rqs rqs--tight">' + fieldChecks + '</ul><h3 class="rq__h">Core areas</h3><ul class="rqs rqs--tight">' + coreChecks + "</ul>" +
-        '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>";
+        '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st, false, md) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>";
     } finally { p.courses = real; }
     return out;
   }
@@ -2064,7 +2159,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007050003";
+  var BUILD = "20261007053426";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
