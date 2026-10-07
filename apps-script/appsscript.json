@@ -17,6 +17,7 @@
   ],
   "urlFetchWhitelist": [
     "https://bcourses.berkeley.edu/",
+    "https://ce.berkeley.edu/",
     "https://script.google.com/",
     "https://script.googleusercontent.com/"
   ],
