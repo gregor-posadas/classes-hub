@@ -1146,7 +1146,7 @@
   }
 
   /* ---------- the PhD pages: an overview, plus one page per part, linked by a row of tabs ---------- */
-  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Funding and programs"], ["people", "Questions and people"]];
+  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Fellowships"], ["p2p", "Path to the Professoriate"], ["people", "Questions and people"]];
   function phdTitle(sub) { var m = PHD_PAGES.filter(function (x) { return x[0] === (sub || ""); })[0]; return m ? m[1] : "PhD"; }
   function phdTabs(sub) {
     return '<nav class="ptabs" aria-label="PhD pages"><ul>' + PHD_PAGES.map(function (x) {
@@ -1167,7 +1167,8 @@
     if (sub === "de") return '<div class="wrap">' + phdHead(sub, "Development Engineering: five courses and a few steps, separate from your minors.") + deSectionHtml() + deOptionsHtml() + foot + "</div>";
     if (sub === "planner") return '<div class="wrap">' + phdHead(sub, "Drag courses into semesters, or use each course's menu, and the checks on the right update as you go. Nothing here changes your plan until you save it.") + plannerHtml() + "</div>";
     if (sub === "timeline") return '<div class="wrap">' + phdHead(sub, "Year by year, from your research plan and emails.") + timelineHtml() + foot + "</div>";
-    if (sub === "funding") return '<div class="wrap">' + phdHead(sub, "Fellowship applications and the programs you're part of.") + fellowshipsHtml() + programsHtml() + foot + "</div>";
+    if (sub === "funding") return '<div class="wrap">' + phdHead(sub, "Fellowship applications, soonest deadline first.") + fellowshipsHtml() + foot + "</div>";
+    if (sub === "p2p") return '<div class="wrap">' + phdHead(sub, "The Graduate Division's year-long program for first-year PhD students: sessions, the deliverable, and what earns the stipend.") + programsHtml() + foot + "</div>";
     if (sub === "people") return '<div class="wrap">' + phdHead(sub, "What to ask, who to ask, and your PhD documents.") + questionsHtml() + contactsHtml() + docsHtml() + foot + "</div>";
     if (sub) return notFound("That PhD page doesn't exist.");
     var next = phdNext(), nowT = termNow(), first = PHDCFG.firstYear || 2026, yr = Math.floor((nowT - (first * 3 + 2)) / 3) + 1;
@@ -1196,7 +1197,13 @@
       card("de", "Designated Emphasis", esc(st.n.done + " of " + st.total + " courses done"), esc(st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : ""))) +
       card("planner", "Planner", "Try a semester", "Drag courses in and check them against your requirements") +
       card("timeline", "Timeline", nextExam ? esc(nextExam.title) : "Five years", nextExam ? esc(mDateText(nextExam)) : "By year and term") +
-      card("funding", "Funding and programs", esc(plural(fel.length, "deadline")) + " this month", prog ? esc(prog.program) + " and fellowship applications" : "Fellowship applications") +
+      card("funding", "Fellowships", esc(plural(fel.length, "deadline")) + " this month", "Applications and their dates") +
+      (prog ? (function () {
+        var items = p.programs.filter(function (x) { return x.program === prog.program; }), today = dayNumber(new Date());
+        var went = items.filter(function (x) { return x.kind === "session" && x.status === "attended"; }).length;
+        var nx = items.filter(function (x) { return x.date && dayFromIso(x.date) >= today && (x.status === "upcoming" || x.status === "todo"); }).sort(function (a, b) { return dayFromIso(a.date) - dayFromIso(b.date); })[0];
+        return card("p2p", prog.program, esc(went + " of " + (Number(prog.required) || 0) + " sessions"), nx ? "Next: " + esc(nx.title.replace(/:.*$/, "")) + ", " + esc(fmtDay(noonOf(dayFromIso(nx.date)))) : "Sessions and the deliverable");
+      })() : "") +
       card("people", "Questions and people", esc(plural(openQ, "open question")), "Contacts and PhD documents") + "</ul></section>";
   }
   function docsHtml() {
@@ -2162,7 +2169,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007054241";
+  var BUILD = "20261007055014";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
