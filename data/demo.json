@@ -521,5 +521,400 @@
     "tentative": false
    }
   ]
- }
+ },
+ "phd": {
+  "courses": [
+   {
+    "id": "pc-1",
+    "code": "SAMPLE 501",
+    "title": "Water treatment (sample)",
+    "school": "Previous university",
+    "term": "Spring 2024",
+    "units": "3",
+    "status": "done",
+    "field": "major",
+    "core": "water",
+    "de": "",
+    "approval": "Advisor, by email",
+    "notes": "Sample course from a master's degree.",
+    "order": "1"
+   },
+   {
+    "id": "pc-2",
+    "code": "SAMPLE 502",
+    "title": "Air quality (sample)",
+    "school": "Previous university",
+    "term": "Fall 2023",
+    "units": "3",
+    "status": "done",
+    "field": "none",
+    "core": "air",
+    "de": "",
+    "approval": "Advisor, by email",
+    "notes": "",
+    "order": "2"
+   },
+   {
+    "id": "pc-3",
+    "code": "SAMPLE 503",
+    "title": "Systems modeling (sample)",
+    "school": "Previous university",
+    "term": "Fall 2024",
+    "units": "3",
+    "status": "done",
+    "field": "flexible",
+    "core": "",
+    "de": "",
+    "approval": "",
+    "notes": "",
+    "order": "3"
+   },
+   {
+    "id": "pc-4",
+    "code": "DEVENG C200",
+    "title": "Development engineering design (sample)",
+    "school": "UC Berkeley",
+    "term": "Fall 2026",
+    "units": "3",
+    "status": "in-progress",
+    "field": "minor-a",
+    "core": "",
+    "de": "core",
+    "approval": "",
+    "notes": "DE core course. Before the qualifying exam.",
+    "order": "4"
+   },
+   {
+    "id": "pc-5",
+    "code": "SAMPLE 202",
+    "title": "Research design (sample)",
+    "school": "UC Berkeley",
+    "term": "Fall 2026",
+    "units": "3",
+    "status": "in-progress",
+    "field": "minor-a",
+    "core": "",
+    "de": "m2",
+    "approval": "",
+    "notes": "",
+    "order": "5"
+   },
+   {
+    "id": "pc-6",
+    "code": "SAMPLE 290",
+    "title": "Graduate seminar (sample)",
+    "school": "UC Berkeley",
+    "term": "Fall 2026",
+    "units": "3",
+    "status": "in-progress",
+    "field": "minor-b",
+    "core": "",
+    "de": "",
+    "approval": "",
+    "notes": "",
+    "order": "6"
+   },
+   {
+    "id": "pc-7",
+    "code": "CIVENG 203",
+    "title": "Hydrology (sample)",
+    "school": "UC Berkeley",
+    "term": "Spring 2027",
+    "units": "3",
+    "status": "planned",
+    "field": "major",
+    "core": "hydrology",
+    "de": "",
+    "approval": "",
+    "notes": "",
+    "order": "7"
+   },
+   {
+    "id": "pc-8",
+    "code": "CIVENG 206",
+    "title": "Water resources (sample)",
+    "school": "UC Berkeley",
+    "term": "Fall 2027",
+    "units": "3",
+    "status": "planned",
+    "field": "major",
+    "core": "",
+    "de": "",
+    "approval": "",
+    "notes": "",
+    "order": "8"
+   },
+   {
+    "id": "pc-9",
+    "code": "DEVENG 210",
+    "title": "DE research seminar (sample)",
+    "school": "UC Berkeley",
+    "term": "",
+    "units": "2",
+    "status": "planned",
+    "field": "none",
+    "core": "",
+    "de": "core",
+    "approval": "",
+    "notes": "",
+    "order": "9"
+   },
+   {
+    "id": "pc-10",
+    "code": "SAMPLE 240",
+    "title": "Policy elective (sample)",
+    "school": "UC Berkeley",
+    "term": "",
+    "units": "",
+    "status": "idea",
+    "field": "minor-b",
+    "core": "",
+    "de": "",
+    "approval": "",
+    "notes": "",
+    "order": "10"
+   }
+  ],
+  "milestones": [
+   {
+    "id": "pm-1",
+    "date": "2026-08-26",
+    "term": "Fall 2026",
+    "title": "First semester",
+    "category": "admin",
+    "status": "done",
+    "notes": "",
+    "link": "",
+    "order": "1"
+   },
+   {
+    "id": "pm-2",
+    "date": "2026-10-30",
+    "term": "Fall 2026",
+    "title": "Last day to change a grading option",
+    "category": "admin",
+    "status": "upcoming",
+    "notes": "",
+    "link": "",
+    "order": "2"
+   },
+   {
+    "id": "pm-3",
+    "date": "",
+    "term": "Fall 2026",
+    "title": "Fill in the program of study with your advisor",
+    "category": "coursework",
+    "status": "target",
+    "notes": "Approved before the qualifying exam.",
+    "link": "",
+    "order": "3"
+   },
+   {
+    "id": "pm-4",
+    "date": "",
+    "term": "Spring 2027",
+    "title": "Preliminary exam",
+    "category": "exam",
+    "status": "target",
+    "notes": "Oral exam, sample notes.",
+    "link": "",
+    "order": "4"
+   },
+   {
+    "id": "pm-5",
+    "date": "",
+    "term": "Summer 2027",
+    "title": "Scoping fieldwork",
+    "category": "fieldwork",
+    "status": "target",
+    "notes": "",
+    "link": "",
+    "order": "5"
+   },
+   {
+    "id": "pm-6",
+    "date": "",
+    "term": "Fall 2027",
+    "title": "Research assistantship starts",
+    "category": "funding",
+    "status": "upcoming",
+    "notes": "",
+    "link": "",
+    "order": "6"
+   },
+   {
+    "id": "pm-7",
+    "date": "",
+    "term": "Spring 2028",
+    "title": "Qualifying exam",
+    "category": "exam",
+    "status": "target",
+    "notes": "",
+    "link": "",
+    "order": "7"
+   },
+   {
+    "id": "pm-8",
+    "date": "",
+    "term": "Summer 2028",
+    "title": "Main fieldwork",
+    "category": "fieldwork",
+    "status": "target",
+    "notes": "",
+    "link": "",
+    "order": "8"
+   },
+   {
+    "id": "pm-9",
+    "date": "",
+    "term": "Spring 2030",
+    "title": "Full dissertation draft",
+    "category": "research",
+    "status": "target",
+    "notes": "",
+    "link": "",
+    "order": "9"
+   },
+   {
+    "id": "pm-10",
+    "date": "",
+    "term": "Spring 2031",
+    "title": "Defense",
+    "category": "exam",
+    "status": "target",
+    "notes": "",
+    "link": "",
+    "order": "10"
+   }
+  ],
+  "questions": [
+   {
+    "id": "pq-1",
+    "question": "Do courses from the master's count toward the 30 units? (sample)",
+    "who": "Graduate advisor",
+    "status": "open",
+    "answer": "",
+    "asked": "",
+    "link": ""
+   },
+   {
+    "id": "pq-2",
+    "question": "Which two minor fields? (sample)",
+    "who": "Research advisor",
+    "status": "open",
+    "answer": "",
+    "asked": "",
+    "link": ""
+   },
+   {
+    "id": "pq-3",
+    "question": "Is research seminar required every semester? (sample)",
+    "who": "Student affairs",
+    "status": "answered",
+    "answer": "Once, before or after the qualifying exam.",
+    "asked": "",
+    "link": ""
+   }
+  ],
+  "contacts": [
+   {
+    "id": "pp-1",
+    "name": "Research advisor (sample)",
+    "role": "Advisor",
+    "email": "",
+    "group": "Advisor"
+   },
+   {
+    "id": "pp-2",
+    "name": "Student affairs officer (sample)",
+    "role": "Department",
+    "email": "",
+    "group": "Department"
+   },
+   {
+    "id": "pp-3",
+    "name": "DE advisor (sample)",
+    "role": "Designated Emphasis",
+    "email": "",
+    "group": "DE"
+   }
+  ]
+ },
+ "officeHours": [
+  {
+   "id": "oh-1",
+   "courseId": "c-101",
+   "name": "Instructor (sample)",
+   "role": "Instructor",
+   "day": "Wed",
+   "start": "15:00",
+   "end": "16:00",
+   "place": "Room 200",
+   "link": "",
+   "how": "Drop in.",
+   "notes": "",
+   "source": "",
+   "eventId": ""
+  },
+  {
+   "id": "oh-2",
+   "courseId": "c-101",
+   "name": "GSI (sample)",
+   "role": "GSI",
+   "day": "Thu",
+   "start": "10:30",
+   "end": "12:00",
+   "place": "Room 210",
+   "link": "",
+   "how": "Email an hour ahead.",
+   "notes": "",
+   "source": "",
+   "eventId": ""
+  },
+  {
+   "id": "oh-3",
+   "courseId": "c-102",
+   "name": "Instructor (sample)",
+   "role": "Instructor",
+   "day": "Tue",
+   "start": "12:00",
+   "end": "14:00",
+   "place": "Zoom",
+   "link": "",
+   "how": "Meeting link in the syllabus.",
+   "notes": "",
+   "source": "",
+   "eventId": ""
+  },
+  {
+   "id": "oh-4",
+   "courseId": "c-103",
+   "name": "Professor (sample)",
+   "role": "Instructor",
+   "day": "Tue",
+   "start": "14:00",
+   "end": "15:00",
+   "place": "Room 633",
+   "link": "",
+   "how": "Or book a time.",
+   "notes": "",
+   "source": "",
+   "eventId": ""
+  },
+  {
+   "id": "oh-5",
+   "courseId": "c-104",
+   "name": "GSI (sample)",
+   "role": "GSI",
+   "day": "Mon",
+   "start": "13:00",
+   "end": "14:00",
+   "place": "Room 110",
+   "link": "",
+   "how": "",
+   "notes": "",
+   "source": "",
+   "eventId": ""
+  }
+ ]
 }

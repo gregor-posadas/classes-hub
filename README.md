@@ -1,9 +1,9 @@
-# Classes Hub
+# Berkeley Hub
 
-All of Gregor's classes for the semester in one place, read from bCourses: what's due this week across every course, what's overdue or missing, what's already turned in, and announcements. Same design and code base as the [Microbe Busters Hub](https://github.com/gregor-posadas/microbe-busters-hub), trimmed down for one person instead of a team.
+Gregor's Berkeley in one place. Classes from bCourses (what's due this week across every course, what's overdue or missing, what's already turned in, and announcements), everyone's office hours, and the PhD plan: requirements, a five-year timeline, coursework, open questions for advisors, and who to ask. Same design and code base as the [Microbe Busters Hub](https://github.com/gregor-posadas/microbe-busters-hub), for one person instead of a team. (It started as the Classes Hub, so the repo and the Sheet keep that name.)
 
 - **Website:** plain HTML, CSS and JavaScript, served by GitHub Pages. No build step.
-- **Data:** the Google Sheet "Classes Hub data" in your Drive. Nothing about your courses is stored in this repository.
+- **Data:** the Google Sheet "Classes Hub data" in your Drive. Nothing about your courses or your PhD is stored in this repository. The PhD plan is in four tabs, `PhD coursework`, `PhD milestones`, `PhD questions` and `PhD contacts`, and office hours in `Office hours`. You can edit them in the Sheet or on the site. The general rules (30 units, the core areas, the DE) are in `assets/config.js` under `phd`.
 - **Backend:** a Google Apps Script web app attached to that Sheet. Every 2 hours it reads your courses, assignments (with your submission status) and announcements from bCourses through the Canvas API, keeps them in the Sheet, puts every due date on a "Fall 2026 classes" Google Calendar, and emails you at 8 AM on days with something to say.
 - **Read only:** the hub never submits, posts or changes anything on bCourses.
 - **Google Calendar, both ways:** events from the calendars you pick show on This week, the month calendar and each day's page (read only), and every due date goes onto a "<term> classes" calendar.
@@ -16,13 +16,15 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 
 | Page | What it's for |
 | --- | --- |
-| **This week** | Built for a laptop. **Today** leads: your schedule from Google Calendar and what's due today. Then anything overdue, then the rest of the week through Sunday. The side column has a split-flap clock, a month calendar (dots for what's due, in course colors, and a dash for events; point at a day for a preview), the semester bars, and this week's announcements. Point at any assignment or announcement for a preview. |
+| **This week** | Built for a laptop. The semester bars and a strip of the week lead, then anything overdue, what's due today, and the rest of the week through Sunday. The side column has a split-flap clock, a month calendar (dots for what's due, in course colors, and a dash for events; point at a day for a preview), today's office hours, this week's announcements, and your next PhD step. Point at any assignment or announcement for a preview. |
 | **Courses** | A card for each course, plus any you've hidden. |
 | **Day page** | Everything due on one day plus that day's events. Open it from the month calendar or a day heading. |
 | **Course page** | Everything for one course by due date, its announcements, an **Open on bCourses** button, and a button to a team hub if it has one (DevEng C200 links to the Microbe Busters Hub). **Course settings** lets you rename or hide a course. |
 | **Assignment page** | Due date, what bCourses says (submitted, missing, graded), the instructions from bCourses, **Open on bCourses**, **Add to Google Calendar**, and your own progress (To do, In progress, Done). |
 | **All work** | Every assignment and to-do by week, filtered by course and by still to do, done or everything. |
+| **Office hours** | Every instructor's and GSI's weekly hours, by day (today is outlined, and one happening now says so) and by course, with how to join and where the hours came from. Point at one for its Zoom details. Today's hours also show in the side column of This week. |
 | **Announcements** | The last 30 days from every course, newest first. |
+| **PhD** | What's coming up next; the 30-unit requirement with bars for the major, both minors and the flexible units (done, in progress, planned); checks for the core areas, the minor rules and the Development Engineering DE; a timeline by year and term with the current term outlined; every course with where it counts; open questions; and contacts. Everything can be added to or edited from the page. The next step also shows in the side column of This week. |
 | **About and settings** | Morning email setting, **Check bCourses now**, what the symbols mean, and common questions. |
 
 **Done means done.** Anything you submit on bCourses is marked done on its own at the next check. Work turned in on paper, in class or on another site (Gradescope, say) won't show as submitted on bCourses, so set it to Done yourself.
@@ -47,6 +49,8 @@ Until the backend is connected, the site runs on sample courses from `data/demo.
 10. Look over your courses. Hide any that aren't classes (a department or orientation site) from **Course settings** on their course page.
 
 The token goes only through the box in step 9 (or, if you prefer, straight into Script properties as `CANVAS_TOKEN`). Never put it in this repository or the Sheet. The site can replace the token but never show it.
+
+Office hours are kept by hand in the `Office hours` tab (bCourses has no field for them). Each one was also added once to Google Calendar as a weekly event, marked free, through the last day of instruction; changing a row doesn't move its event.
 
 When you change `Code.gs` later, use **Deploy > Manage deployments > Edit > New version** so the `/exec` URL stays the same.
 
@@ -85,7 +89,7 @@ All in **Project Settings > Script properties**:
 The same repo, site address and Sheet carry over. Each new semester:
 
 1. In Script properties, change `TERM` (for example to `Spring 2027`) and `SEMESTER_START` and `SEMESTER_END`.
-2. In `assets/config.js`, change `semesterLabel`, `semesterStart` and `semesterEnd`. Run `sh scripts/stamp-version.sh`, commit and push.
+2. In `assets/config.js`, change `semesterLabel`, `semesterStart`, `semesterEnd` and `lastInstruction`. Update the `Office hours` tab and add the new hours to Google Calendar. Run `sh scripts/stamp-version.sh`, commit and push.
 3. If the token expired, make a new one in bCourses and paste it under **About and settings > bCourses** (works from a phone).
 4. Run `syncCanvas`. Last semester's courses are hidden on their own, and their history stays in the Sheet.
 5. Optional: rename the calendar in Google Calendar (for example to "Spring 2027 classes"). The hub keeps using the same one.

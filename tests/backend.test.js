@@ -222,4 +222,37 @@ t('cachePutBig and cacheGetBig round-trip a value bigger than one cache entry', 
   assert.strictEqual(ctx.cacheGetBig('payload'), null);
 });
 
+t('cleanPhdRow keeps a course row to the tab and checks its fields', () => {
+  const r = ctx.cleanPhdRow('courses', { code: ' CIVENG 203 ', title: 'Surface Water Hydrology', units: '3', field: 'nonsense', de: '', status: '', extra: 'x', id: 'bad id' }, () => 'pc-new1');
+  assert.strictEqual(r.code, 'CIVENG 203');
+  assert.strictEqual(r.field, '');
+  assert.strictEqual(r.status, 'planned');
+  assert.strictEqual(r.id, 'pc-new1');
+  assert.ok(!('extra' in r));
+  assert.strictEqual(JSON.stringify(Object.keys(r)), JSON.stringify(ctx.TABS['PhD coursework']));
+  assert.strictEqual(ctx.cleanPhdRow('courses', { code: 'X', id: 'pc-ce203' }, () => 'pc-new').id, 'pc-ce203');
+  assert.throws(() => ctx.cleanPhdRow('courses', { title: 'no code' }, () => 'pc-1'), /code/);
+  assert.throws(() => ctx.cleanPhdRow('courses', { code: 'X', status: 'maybe' }, () => 'pc-1'), /isn't one of/);
+  assert.throws(() => ctx.cleanPhdRow('courses', { code: 'X', units: 'three' }, () => 'pc-1'), /Units/);
+});
+
+t('cleanPhdRow checks milestone dates, links and contact emails', () => {
+  const m = ctx.cleanPhdRow('milestones', { title: 'Prelim', date: '2027-04-01', link: 'javascript:alert(1)' }, () => 'pm-1');
+  assert.strictEqual(m.link, '');
+  assert.strictEqual(m.status, 'target');
+  assert.strictEqual(m.category, 'research');
+  assert.throws(() => ctx.cleanPhdRow('milestones', { title: 'Prelim', date: 'April' }, () => 'pm-1'), /YYYY-MM-DD/);
+  assert.throws(() => ctx.cleanPhdRow('contacts', { name: 'A', email: 'not an email' }, () => 'pp-1'), /email/);
+  assert.throws(() => ctx.cleanPhdRow('grades', { name: 'A' }, () => 'x'), /Unknown/);
+});
+
+t('cleanPhdRow checks office hours times and days', () => {
+  const r = ctx.cleanPhdRow('officeHours', { name: 'A GSI', day: 'Tue', start: '13:00', end: '14:30', eventId: 'abc' }, () => 'oh-1');
+  assert.strictEqual(r.eventId, 'abc');
+  assert.strictEqual(r.id, 'oh-1');
+  assert.throws(() => ctx.cleanPhdRow('officeHours', { name: 'A', day: 'Tue', start: '1pm', end: '14:00' }, () => 'oh-1'), /HH:MM/);
+  assert.throws(() => ctx.cleanPhdRow('officeHours', { name: 'A', day: 'Tue', start: '14:00', end: '13:00' }, () => 'oh-1'), /after/);
+  assert.throws(() => ctx.cleanPhdRow('officeHours', { name: 'A', day: 'Tuesday', start: '13:00', end: '14:00' }, () => 'oh-1'), /isn't one of/);
+});
+
 console.log(n + ' checks passed');

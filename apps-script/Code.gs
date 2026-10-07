@@ -1,5 +1,5 @@
 /**
- * Classes Hub: backend.
+ * Berkeley Hub: backend.
  *
  * Paste this file into the Apps Script editor of the "Classes Hub data" Google Sheet
  * (Extensions > Apps Script), add your bCourses token as the script property CANVAS_TOKEN,
@@ -13,21 +13,43 @@
  *  - Emails you at 8 AM, only on days with something to say.
  *  - Shows the events on your Google calendars next to your work (read only).
  *  - Brings in your assignments from the Microbe Busters Hub, and sends status changes back to it.
+ *  - Keeps your PhD plan (coursework, milestones, open questions, contacts) in four "PhD ..." tabs,
+ *    and your instructors' office hours in an "Office hours" tab. Edit them from the site or in the Sheet.
  *
  * The bCourses token lives only in Script properties. It is never sent to the website.
  * The hub only reads from bCourses; it never submits, posts or changes anything there.
  */
 
 var TZ = 'America/Los_Angeles';
-var APP_NAME = 'Classes Hub';
+var APP_NAME = 'Berkeley Hub';
 var TABS = {
   Courses: ['id', 'canvasId', 'code', 'name', 'shortName', 'color', 'textColor', 'url', 'hidden', 'hubUrl', 'hubLabel', 'score', 'grade', 'term', 'syncedAt', 'syncError'],
   Items: ['id', 'canvasId', 'courseId', 'kind', 'title', 'due', 'unlockAt', 'points', 'url', 'description', 'submissionTypes',
     'submitted', 'submittedAt', 'late', 'missing', 'score', 'grade', 'myStatus', 'updatedAt', 'calendarEventId', 'calendarSig',
     'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project', 'series'],
   Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message', 'read'],
-  Log: ['timestamp', 'action', 'detail']
+  Log: ['timestamp', 'action', 'detail'],
+  'PhD coursework': ['id', 'code', 'title', 'school', 'term', 'units', 'status', 'field', 'core', 'de', 'approval', 'notes', 'order'],
+  'PhD milestones': ['id', 'date', 'term', 'title', 'category', 'status', 'notes', 'link', 'order'],
+  'PhD questions': ['id', 'question', 'who', 'status', 'answer', 'asked', 'link'],
+  'PhD contacts': ['id', 'name', 'role', 'email', 'group'],
+  'Office hours': ['id', 'courseId', 'name', 'role', 'day', 'start', 'end', 'place', 'link', 'how', 'notes', 'source', 'eventId']
 };
+
+/* Records you keep by hand (the PhD plan and office hours): which tab each kind lives in, its id prefix, the field it can't do without, and the allowed values of its choice fields. */
+var PHD = {
+  courses: { tab: 'PhD coursework', prefix: 'pc-', need: 'code', choices: {
+    status: ['planned', 'in-progress', 'done', 'idea', 'dropped'],
+    field: ['', 'major', 'minor-a', 'minor-b', 'flexible', 'none'],
+    de: ['', 'core', 'm1', 'm2', 'm3', 'petition'] } },
+  milestones: { tab: 'PhD milestones', prefix: 'pm-', need: 'title', choices: {
+    category: ['research', 'exam', 'coursework', 'fieldwork', 'funding', 'admin'],
+    status: ['target', 'upcoming', 'done'] } },
+  questions: { tab: 'PhD questions', prefix: 'pq-', need: 'question', choices: { status: ['open', 'answered'] } },
+  contacts: { tab: 'PhD contacts', prefix: 'pp-', need: 'name', choices: {} },
+  officeHours: { tab: 'Office hours', prefix: 'oh-', need: 'name', choices: { day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } }
+};
+var PHD_KINDS = ['courses', 'milestones', 'questions', 'contacts'];
 
 /* Settings. Each can be overridden in Project Settings > Script properties without editing code. */
 var DEFAULTS = {
@@ -159,6 +181,8 @@ function doPost(e) {
       case 'clearTeamCode': return json(clearTeamCode());
       case 'saveCalendars': return json(saveCalendars(b.exclude || []));
       case 'markRead': return json(markRead(b.ids || []));
+      case 'saveRecord': return json(saveRecord(b.kind, b.row || {}));
+      case 'deleteRecord': return json(deleteRecord(b.kind, b.id));
       default: throw new Error('Unknown action.');
     }
   } catch (err) {
@@ -260,6 +284,8 @@ function payload() {
     }),
     announcements: withHubReads(readTable('Announcements')),
     calendar: googleCalendar(),
+    phd: phdData(),
+    officeHours: safeRead('Office hours'),
     settings: {
       emailPref: setting('EMAIL_PREF'),
       calendar: setting('CALENDAR_SYNC') !== 'off',
@@ -715,6 +741,60 @@ function markRead(ids) {
   var all = Object.keys(seen).slice(-600);   // newest last; a semester's worth
   PropertiesService.getScriptProperties().setProperty('HUB_READ', JSON.stringify(all));
   return { ok: true, read: (ids || []).length };
+}
+
+/* ------------------------------------------------------------------ the PhD plan and office hours */
+
+function safeRead(tab) { try { return readTable(tab); } catch (e) { return []; } }
+function phdData() {
+  var out = {};
+  PHD_KINDS.forEach(function (k) { out[k] = safeRead(PHD[k].tab); });
+  return out;
+}
+
+/** A row from the site, trimmed to the tab's columns, with choice fields checked and links and dates kept to safe shapes. */
+function cleanPhdRow(kind, input, makeId) {
+  var spec = PHD[kind];
+  if (!spec) throw new Error('Unknown kind of record.');
+  var head = TABS[spec.tab], row = {};
+  head.forEach(function (h) { row[h] = String(input[h] === undefined || input[h] === null ? '' : input[h]).trim().slice(0, h === 'notes' || h === 'answer' ? 3000 : 300); });
+  if (!row[spec.need]) throw new Error('Fill in the ' + spec.need + ' first.');
+  Object.keys(spec.choices).forEach(function (h) {
+    var ok = spec.choices[h];
+    if (ok.indexOf(row[h]) < 0) {
+      if (ok.indexOf('') > -1 || !row[h]) row[h] = ok[0];
+      else throw new Error('"' + row[h] + '" isn\'t one of: ' + ok.join(', ') + '.');
+    }
+  });
+  if (row.link && !/^https?:\/\//i.test(row.link)) row.link = '';
+  if (row.email && !/^[^\s@]+@[^\s@]+$/.test(row.email)) throw new Error('That email address doesn\'t look right.');
+  ['date', 'asked'].forEach(function (h) { if (row[h] && !/^\d{4}-\d{2}-\d{2}$/.test(row[h])) throw new Error('Dates go in as YYYY-MM-DD.'); });
+  if (row.units && !/^\d{1,2}(\.\d)?$/.test(row.units)) throw new Error('Units should be a number, like 3.');
+  ['start', 'end'].forEach(function (h) { if (row[h] !== undefined && kind === 'officeHours' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(row[h])) throw new Error('Times go in as HH:MM, like 14:00.'); });
+  if (kind === 'officeHours' && row.end <= row.start) throw new Error('The end time has to be after the start time.');
+  if (row.order && !/^\d{1,4}$/.test(row.order)) row.order = '';
+  if (!new RegExp('^' + spec.prefix + '[\\w-]{1,40}$').test(row.id)) row.id = makeId();
+  return row;
+}
+
+function saveRecord(kind, input) {
+  var spec = PHD[kind];
+  if (!spec) throw new Error('Unknown kind of record.');
+  if (!sheet(spec.tab)) throw new Error('The Sheet has no "' + spec.tab + '" tab yet. Run setup once in the Apps Script editor.');
+  var rows = readTable(spec.tab);
+  var row = cleanPhdRow(kind, input, function () { return spec.prefix + Utilities.getUuid().slice(0, 8); });
+  if (!row.order) row.order = String(rows.reduce(function (m, r) { return Math.max(m, Number(r.order) || 0); }, 0) + 1);
+  writeRow(spec.tab, row);
+  log('save ' + kind, row[spec.need]);
+  return { ok: true, kind: kind, row: row };
+}
+
+function deleteRecord(kind, id) {
+  var spec = PHD[kind];
+  if (!spec) throw new Error('Unknown kind of record.');
+  deleteRow(spec.tab, id);
+  log('delete ' + kind, id);
+  return { ok: true, kind: kind, id: String(id) };
 }
 
 function publicItem(it) { var o = Object.assign({}, it); delete o.calendarEventId; delete o.calendarSig; return o; }

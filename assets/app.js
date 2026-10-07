@@ -1,4 +1,4 @@
-/* Classes Hub: this week's work across every Fall 2026 course, from bCourses.
+/* Berkeley Hub: this week's work across every course (from bCourses), office hours, and the PhD plan.
    Data comes from a Google Apps Script web app (see apps-script/Code.gs),
    or from data/demo.json when no apiUrl is set in assets/config.js.
    Same design and building blocks as the Microbe Busters Hub. */
@@ -301,7 +301,7 @@
     var d = due(it); if (!d) return "";
     var f = function (x) { return x.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); };
     var c = course(it.courseId), start = new Date(d.getTime() - 30 * 60000);
-    var details = (it.url ? "On bCourses: " + it.url + "\n\n" : "") + (it.link ? it.link + "\n\n" : "") + "Classes Hub: " + location.href.split("#")[0] + "#/i/" + it.id;
+    var details = (it.url ? "On bCourses: " + it.url + "\n\n" : "") + (it.link ? it.link + "\n\n" : "") + "Berkeley Hub: " + location.href.split("#")[0] + "#/i/" + it.id;
     return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("Due" + (c ? " (" + c.shortName + ")" : "") + ": " + it.title) +
       "&dates=" + f(start) + "/" + f(d) + "&details=" + encodeURIComponent(details);
   }
@@ -502,11 +502,11 @@
     var recent = state.data.announcements.filter(function (n) { return !courseHidden(n.courseId) && n.postedAt && (now - new Date(n.postedAt) < 7 * DAY || (!isRead(n) && now - new Date(n.postedAt) < 21 * DAY)); })
       .sort(function (a, b) { return (isRead(a) - isRead(b)) || (a.postedAt < b.postedAt ? 1 : -1); });
     var unread = recent.filter(function (n) { return !isRead(n); }).length;
-    var rail = '<aside class="rail" aria-label="Clock, calendar and announcements">' +
-      '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" +
+    var rail = '<aside class="rail" aria-label="Clock, calendar, office hours, announcements and PhD">' +
+      '<section class="card" aria-label="Clock and calendar">' + clockHtml() + monthHtml() + "</section>" + ohRail() +
       '<section class="rail__sec" aria-labelledby="hn-h"><div class="rail__head"><h2 id="hn-h">Announcements' + (unread ? ' <span class="h-count">' + unread + " new</span>" : "") + "</h2>" + markAllBtn(unread) + "</div>" +
       (recent.length ? newsCompact(recent.slice(0, 6)) : '<p class="empty">No announcements this week.</p>') +
-      '<p class="rail__more"><a href="#/news">All announcements</a></p></section></aside>';
+      '<p class="rail__more"><a href="#/news">All announcements</a></p></section>' + phdRail() + "</aside>";
 
     var weekLeft = open.filter(function (it) { var d = due(it); return d && d >= now && dayNumber(d) <= sunday; }).length;
     return '<div class="wrap"><div class="head"><h1 tabindex="-1">This week</h1><p>' + (sem.before || sem.after ? "" : "Week " + sem.week + " of " + sem.weeks + ". ") +
@@ -682,6 +682,396 @@
       (list.length ? newsList(list, !f) : '<p class="empty">No announcements in the last 30 days.</p>') + "</div>";
   }
 
+  /* ---------- the PhD plan: requirements, timeline, coursework, open questions, contacts ----------
+     Read from the four "PhD ..." tabs of the Sheet. The rules (30 units, core areas, the DE) are in config.js. */
+  var PHDCFG = cfg.phd || {};
+  var RULES = PHDCFG.rules || {};
+  var PHD_KINDS = ["courses", "milestones", "questions", "contacts"];
+  function phd() { return state.data.phd || null; }
+  function recList(kind) { return kind === "officeHours" ? state.data.officeHours : state.data.phd[kind]; }
+  function units(c) { var u = parseFloat(c.units); return isNaN(u) ? 0 : u; }
+  function fmtUnits(n) { return (n % 1 ? n.toFixed(1) : String(n)) + (n === 1 ? " unit" : " units"); }
+  function byOrder(a, b) { return (Number(a.order) || 999) - (Number(b.order) || 999); }
+  var C_STATUS = { "done": "Done", "in-progress": "In progress", "planned": "Planned", "idea": "Idea", "dropped": "Dropped" };
+  var C_SHAPE = { "done": "done", "in-progress": "doing", "planned": "todo", "idea": "todo", "dropped": "todo" };
+  var M_STATUS = { done: "Done", upcoming: "Coming up", target: "Planned" };
+  var M_SHAPE = { done: "done", upcoming: "soon", target: "todo" };
+  var M_CAT = { exam: "Exam", coursework: "Coursework", fieldwork: "Fieldwork", funding: "Funding", admin: "Paperwork", research: "Research" };
+  var TERMS = ["Spring", "Summer", "Fall"];
+
+  /* Terms as numbers, so they sort: Spring 2027 < Summer 2027 < Fall 2027. */
+  function termKey(t) { var m = /^(Spring|Summer|Fall)\s+(\d{4})$/.exec(String(t || "").trim()); return m ? +m[2] * 3 + TERMS.indexOf(m[1]) : NaN; }
+  function termName(k) { return TERMS[k % 3] + " " + Math.floor(k / 3); }
+  function termOfDate(iso) { var p = String(iso || "").split("-"); if (p.length !== 3) return NaN; var mo = +p[1]; return +p[0] * 3 + (mo <= 5 ? 0 : mo <= 7 ? 1 : 2); }
+  function termNow() { var p = parts(new Date()); return termOfDate(p.year + "-" + p.month + "-" + p.day); }
+  function mTerm(m) { var k = termKey(m.term); return isNaN(k) ? termOfDate(m.date) : k; }
+  /* When a milestone happens, for sorting: its date, or the start of its term. */
+  function mWhen(m) {
+    if (m.date) return dayFromIso(m.date);
+    var k = mTerm(m); if (isNaN(k)) return Infinity;
+    var y = Math.floor(k / 3), s = ["-01-20", "-06-01", "-08-26"][k % 3];
+    return dayFromIso(y + s);
+  }
+  function mSort(a, b) { return (mWhen(a) - mWhen(b)) || byOrder(a, b); }
+  function mDateText(m) { return m.date ? fmtDay(noonOf(dayFromIso(m.date)), true) : (m.term || "No date yet"); }
+  /* What's next: anything not done, from this term on, soonest first. */
+  function phdNext() {
+    var p = phd(); if (!p) return [];
+    var nowT = termNow(), today = dayNumber(new Date());
+    return p.milestones.filter(function (m) {
+      if (m.status === "done") return false;
+      if (m.date) return dayFromIso(m.date) >= today;
+      var k = mTerm(m); return isNaN(k) || k >= nowT;
+    }).sort(mSort);
+  }
+
+  function isCEE(c) { return /^(CIVENG|CE)\b/i.test(String(c.code || "").trim()); }
+  function isEnvECore(c) { return c.school === "UC Berkeley" && /^(CIVENG|CE)\s*(2(0\d|1\d)|1(0\d|1\d)|173)[A-Z]?$/i.test(String(c.code || "").trim()); }
+  function counted(c) { return c.status === "done" || c.status === "in-progress" || c.status === "planned"; }
+  function fieldStats(key) {
+    var list = phd().courses.filter(function (c) { return c.field === key && counted(c); }).sort(byOrder);
+    var s = { list: list, done: 0, doing: 0, planned: 0 };
+    list.forEach(function (c) { s[c.status === "done" ? "done" : c.status === "in-progress" ? "doing" : "planned"] += units(c); });
+    s.sum = s.done + s.doing + s.planned;
+    return s;
+  }
+  /* A bar in three parts: done, in progress, planned. Each part is also named in the text next to it. */
+  function unitBar(s, need, label) {
+    var scale = Math.max(need, s.sum) || 1, w = function (n) { return (100 * n / scale).toFixed(2) + "%"; };
+    var said = label + ": " + fmtUnits(s.done) + " done, " + fmtUnits(s.doing) + " in progress, " + fmtUnits(s.planned) + " planned, of " + need + " needed.";
+    return '<div class="ubar" role="img" aria-label="' + esc(said) + '"><i class="ubar__done" style="width:' + w(s.done) + '"></i><i class="ubar__doing" style="width:' + w(s.doing) + '"></i><i class="ubar__plan" style="width:' + w(s.planned) + '"></i>' +
+      (s.sum > need ? '<b class="ubar__need" style="left:' + w(need) + '" aria-hidden="true"></b>' : "") + "</div>";
+  }
+  function unitText(s, need) {
+    var left = Math.max(0, need - s.sum);
+    return "<b>" + s.done + "</b> done" + (s.doing ? ", <b>" + s.doing + "</b> in progress" : "") + (s.planned ? ", <b>" + s.planned + "</b> planned" : "") + " of " + need +
+      (left ? '. <span class="ureq__gap">' + fmtUnits(left) + " not placed yet.</span>" : s.done >= need ? ". Complete." : ". Covered once the plan is done.");
+  }
+  function check(ok, text, why) {
+    var key = ok === true ? "done" : ok === "doing" ? "doing" : ok === "warn" ? "late" : "todo";
+    var word = { done: "Met", doing: "On track", late: "Check", todo: "Not yet" }[key];
+    return '<li class="rq"><span class="st rq__st">' + shape(key) + word + '</span><span class="rq__t">' + text + (why ? '<small>' + why + "</small>" : "") + "</span></li>";
+  }
+  function courseRef(c) { return '<span class="cref" tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + '</span> <span class="cref__st">(' + esc((C_STATUS[c.status] || c.status).toLowerCase()) + ")</span>"; }
+  function bestStatus(list) {
+    if (list.some(function (c) { return c.status === "done"; })) return true;
+    if (list.some(function (c) { return c.status === "in-progress"; })) return "doing";
+    return false;
+  }
+
+  function requirementsHtml() {
+    var p = phd(), fields = RULES.fields || [], total = 0, totalNeed = RULES.total || 30;
+    var parts2 = { done: 0, doing: 0, planned: 0 };
+    var rowsHtml = fields.map(function (f) {
+      var s = fieldStats(f.key);
+      total += s.sum; parts2.done += s.done; parts2.doing += s.doing; parts2.planned += s.planned;
+      return '<li class="ureq"><div class="ureq__head"><h4>' + esc(f.label) + '</h4><p class="ureq__note">' + esc(f.note || "") + "</p></div>" + unitBar(s, f.min, f.label) +
+        '<p class="ureq__sum">' + unitText(s, f.min) + "</p>" +
+        (s.list.length ? '<p class="ureq__list">' + s.list.map(function (c) { return courseRef(c) + " " + esc(fmtUnits(units(c))); }).join('<span aria-hidden="true"> · </span>') + "</p>" : "") + "</li>";
+    }).join("");
+    parts2.sum = parts2.done + parts2.doing + parts2.planned;
+
+    // Core breadth areas
+    var core = (RULES.core || []).map(function (a) {
+      var list = p.courses.filter(function (c) { return c.core === a.key && counted(c); });
+      return check(list.length ? bestStatus(list) : false, "<b>" + esc(a.label) + "</b>" + (list.length ? ": " + list.map(courseRef).join(", ") : ""), list.length ? "" : esc(a.hint || "No course picked yet."));
+    }).join("");
+
+    // Minor rules
+    var minors = fields.filter(function (f) { return /^minor/.test(f.key); }).map(function (f) { return { f: f, list: fieldStats(f.key).list }; });
+    var outside = minors.filter(function (m) { return m.list.length && m.list.every(function (c) { return !isCEE(c); }); });
+    var envInMinor = [];
+    minors.forEach(function (m) { m.list.forEach(function (c) { if (isEnvECore(c)) envInMinor.push(c); }); });
+    var minorRules = check(outside.length ? true : false, "At least one minor fully outside CEE", outside.length ? esc(outside.map(function (m) { return m.f.label; }).join(" and ")) + " is." : "Neither minor is outside CEE yet.") +
+      check(envInMinor.length ? "warn" : true, "No environmental engineering courses in a minor", envInMinor.length ? "Move " + esc(envInMinor.map(function (c) { return c.code; }).join(", ")) + " out of the minor." : "CE 100 to 119, 173 and 200 to 219 can't go in a minor.");
+
+    // Designated Emphasis
+    var de = RULES.de || {}, active = p.courses.filter(counted);
+    var deCore = active.filter(function (c) { return c.de === "core"; });
+    var electives = active.filter(function (c) { return /^(m1|m2|m3|petition)$/.test(c.de); });
+    var mods = {}; electives.forEach(function (c) { if (c.de !== "petition") mods[c.de] = true; });
+    var home = electives.filter(isCEE), petitions = electives.filter(function (c) { return c.de === "petition"; });
+    var modNames = de.modules || {};
+    var deHtml = (de.core || []).map(function (code) {
+      var hit = deCore.filter(function (c) { return String(c.code).replace(/\s+/g, " ").toUpperCase() === code.toUpperCase(); });
+      return check(hit.length ? bestStatus(hit) : false, hit.length ? hit.map(courseRef).join(", ") : "<b>" + esc(code) + "</b>", hit.length ? (hit[0].title ? esc(hit[0].title) : "") : "Core course, not on your plan yet.");
+    }).join("") +
+      check(electives.length >= (de.electives || 3) ? (petitions.length ? "doing" : bestStatus(electives) === true && electives.every(function (c) { return c.status === "done"; }) ? true : "doing") : false,
+        "<b>" + (de.electives || 3) + " electives</b>: " + (electives.length ? electives.map(function (c) { return courseRef(c) + ", " + esc(c.de === "petition" ? "by petition" : (modNames[c.de] || c.de)); }).join("; ") : "none yet"),
+        (electives.length < (de.electives || 3) ? plural((de.electives || 3) - electives.length, "more elective") + " to pick. " : "") + (petitions.length ? "A petition counts only once approved." : "")) +
+      check(Object.keys(mods).length >= (de.minModules || 2) ? true : false, "Electives from at least " + (de.minModules || 2) + " of the 3 modules", Object.keys(mods).length ? "So far: " + esc(Object.keys(mods).sort().map(function (k) { return modNames[k] || k; }).join(", ")) + "." : "No module covered yet.") +
+      check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " elective from your home department (CEE)", home.length ? esc(home.map(function (c) { return c.code; }).join(", ")) + "." : "");
+
+    var sources = (PHDCFG.sources || []).map(function (s) { return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + newTab() + "</a>"; }).join(", ");
+    return '<section class="section" aria-labelledby="rq-h"><h2 id="rq-h">Requirements</h2>' +
+      '<div class="ureq ureq--total">' + '<div class="ureq__head"><h3>' + totalNeed + ' units of coursework</h3><p class="ureq__note">Counted toward the Program of Study. Research units (CE 299) and ideas don\'t count.</p></div>' + unitBar(parts2, totalNeed, "All coursework") +
+      '<p class="ureq__sum">' + unitText(parts2, totalNeed) + "</p>" +
+      '<ul class="ukey" aria-label="Bar key"><li><i class="ubar__done"></i>Done</li><li><i class="ubar__doing"></i>In progress</li><li><i class="ubar__plan"></i>Planned</li></ul></div>' +
+      '<ul class="ureqs">' + rowsHtml + "</ul>" +
+      '<div class="rqcols"><div><h3 class="rq__h">Core areas</h3><ul class="rqs">' + core + '</ul><h3 class="rq__h">Minor rules</h3><ul class="rqs">' + minorRules + "</ul></div>" +
+      '<div><h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + '</h3><ul class="rqs">' + deHtml + "</ul></div></div>" +
+      (sources ? '<p class="section__note">Rules from ' + sources + ". Check the GPA minimum and anything marked Check with your advisors.</p>" : "") + "</section>";
+  }
+
+  function timelineHtml() {
+    var p = phd(), first = PHDCFG.firstYear || 2026, years = PHDCFG.years || 5, nowT = termNow();
+    var start = first * 3 + 2, end = (first + years) * 3 + 1;   // Fall of year 1 to Summer after year 5
+    var groups = {}; var before = [], undated = [];
+    p.milestones.slice().sort(mSort).forEach(function (m) {
+      var k = mTerm(m);
+      if (isNaN(k)) undated.push(m); else if (k < start) before.push(m); else (groups[k] = groups[k] || []).push(m);
+    });
+    function mItem(m) {
+      return '<li class="ms ms--' + esc(m.category) + (m.status === "done" ? " is-done" : "") + '"><button type="button" class="ms__btn" data-act="edit-phd" data-kind="milestones" data-id="' + esc(m.id) + '" data-peek="p:' + esc(m.id) + '">' +
+        '<span class="st ms__st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span>" +
+        '<span class="ms__t">' + esc(m.title) + (m.date ? '<small>' + esc(fmtDay(noonOf(dayFromIso(m.date)))) + "</small>" : "") + "</span></button></li>";
+    }
+    var body = "";
+    for (var y = 0; y < years; y++) {
+      var fy = first + y, cells = [fy * 3 + 2, (fy + 1) * 3, (fy + 1) * 3 + 1];
+      body += '<tr><th scope="row"><span class="tl__y">Year ' + (y + 1) + "</span><small>" + fy + "–" + String(fy + 1).slice(2) + "</small></th>" + cells.map(function (k) {
+        var list = groups[k] || [], now = k === nowT;
+        return '<td class="' + (now ? "is-now" : k < nowT ? "is-past" : "") + '"><span class="tl__term">' + esc(termName(k)) + (now ? ' <b class="tl__now">Now</b>' : "") + "</span>" +
+          (list.length ? '<ul class="mss">' + list.map(mItem).join("") + "</ul>" : "") + "</td>";
+      }).join("") + "</tr>";
+    }
+    var outside = Object.keys(groups).filter(function (k) { return +k > end; }).map(function (k) { return groups[k]; }).reduce(function (a, b) { return a.concat(b); }, []);
+    var extra = before.length ? '<p class="tl__extra"><b>Before Year 1:</b></p><ul class="mss mss--row">' + before.map(mItem).join("") + "</ul>" : "";
+    var extra2 = outside.concat(undated).length ? '<p class="tl__extra"><b>Later or not placed:</b></p><ul class="mss mss--row">' + outside.concat(undated).map(mItem).join("") + "</ul>" : "";
+    var key = Object.keys(M_STATUS).map(function (k) { return '<li class="st">' + shape(M_SHAPE[k]) + esc(M_STATUS[k]) + "</li>"; }).join("");
+    return '<section class="section" aria-labelledby="tl-h"><div class="h-row"><h2 id="tl-h">Timeline</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="milestones">Add a milestone</button></div>' +
+      '<p class="section__note">From your research plan and emails. Exams are in bold. Point at one for its notes; click to edit it.</p><ul class="tl__key" aria-label="Key">' + key + "</ul>" + extra +
+      '<div class="tl__wrap"><table class="tl"><caption class="sr">PhD timeline by year and term</caption><thead><tr><td></td><th scope="col">Fall</th><th scope="col">Spring</th><th scope="col">Summer</th></tr></thead><tbody>' + body + "</tbody></table></div>" + extra2 + "</section>";
+  }
+
+  function coursesHtml() {
+    var p = phd(), order = ["in-progress", "planned", "done", "idea", "dropped"];
+    var fieldName = {}; (RULES.fields || []).forEach(function (f) { fieldName[f.key] = f.label; }); fieldName.none = "Not counted"; fieldName[""] = "Not placed";
+    var mods = (RULES.de || {}).modules || {};
+    var deName = function (v) { return v === "core" ? "DE core" : v === "petition" ? "DE elective by petition" : mods[v] ? "DE elective, " + mods[v] : ""; };
+    var groupsHtml = order.map(function (st) {
+      var list = p.courses.filter(function (c) { return (c.status || "planned") === st; }).sort(byOrder);
+      if (!list.length) return "";
+      var tbl = '<table class="pm-table ctbl"><caption>' + esc(C_STATUS[st]) + " <small>" + plural(list.length, "course") + '</small></caption><thead><tr><th scope="col">Course</th><th scope="col">Where and when</th><th scope="col">Counts as</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' +
+        list.map(function (c) {
+          var counts2 = [fieldName[c.field] !== undefined ? fieldName[c.field] : c.field, c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", deName(c.de)].filter(Boolean).join("; ");
+          return '<tr><td class="t"><span tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<small class="ctbl__title">' + esc(c.title) + "</small>" : "") + "</td>" +
+            "<td>" + esc([c.school, c.term].filter(Boolean).join(", ") || "Not set") + (c.units ? "<small>" + esc(fmtUnits(units(c))) + "</small>" : "") + "</td>" +
+            "<td>" + esc(counts2) + (c.approval ? '<small>Approved: ' + esc(c.approval) + "</small>" : "") + "</td>" +
+            '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></td></tr>";
+        }).join("") + "</tbody></table>";
+      return st === "idea" || st === "dropped" ? '<details class="done-list"><summary>' + esc(C_STATUS[st]) + " (" + list.length + ")</summary>" + tbl + "</details>" : tbl;
+    }).join("");
+    return '<section class="section" aria-labelledby="pc-h"><div class="h-row"><h2 id="pc-h">Courses</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="courses">Add a course</button></div>' +
+      '<p class="section__note">Everything for the Program of Study, from your earlier degree and from Berkeley. Change where a course counts with Edit, and the requirements above update.</p>' + groupsHtml + "</section>";
+  }
+  function byKey(list, key) { var f = (list || []).filter(function (x) { return x.key === key; })[0]; return f ? f.label : ""; }
+
+  function questionsHtml() {
+    var p = phd(), open = p.questions.filter(function (q) { return q.status !== "answered"; }), done = p.questions.filter(function (q) { return q.status === "answered"; });
+    var qli = function (q) {
+      var link = safeUrl(q.link);
+      return '<li class="q' + (q.status === "answered" ? " is-done" : "") + '"><p class="q__t"><span class="st">' + shape(q.status === "answered" ? "done" : "todo") + '<span class="sr">' + (q.status === "answered" ? "Answered" : "Open") + ": </span></span>" + esc(q.question) + "</p>" +
+        '<p class="q__meta">' + (q.who ? "Ask <b>" + esc(q.who) + "</b>" : "No one picked yet") + (q.asked ? ". Asked " + esc(fmtDay(noonOf(dayFromIso(q.asked)), true)) : "") +
+        (link ? '. <a href="' + esc(link) + '" target="_blank" rel="noopener">The email' + newTab() + "</a>" : "") + "</p>" +
+        (q.answer ? '<p class="q__a">' + esc(q.answer) + "</p>" : "") +
+        '<p class="q__act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="questions" data-id="' + esc(q.id) + '">Edit<span class="sr"> this question</span></button></p></li>';
+    };
+    return '<section class="section" aria-labelledby="pq-h"><div class="h-row"><h2 id="pq-h">Open questions <span class="h-count">' + open.length + '</span></h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="questions">Add a question</button></div>' +
+      (open.length ? '<ul class="qs">' + open.map(qli).join("") + "</ul>" : '<p class="empty">Nothing open.</p>') +
+      (done.length ? '<details class="done-list"><summary>Answered (' + done.length + ")</summary><ul class=\"qs\">" + done.map(qli).join("") + "</ul></details>" : "") + "</section>";
+  }
+
+  function contactsHtml() {
+    var p = phd(), groups = {};
+    p.contacts.forEach(function (c) { (groups[c.group || "Other"] = groups[c.group || "Other"] || []).push(c); });
+    return '<section class="section" aria-labelledby="pp-h"><div class="h-row"><h2 id="pp-h">Who to ask</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="contacts">Add a person</button></div><div class="people">' +
+      Object.keys(groups).map(function (g) {
+        return '<div><h3 class="rq__h">' + esc(g) + '</h3><ul class="ppl">' + groups[g].map(function (c) {
+          return '<li><button type="button" class="ppl__edit" data-act="edit-phd" data-kind="contacts" data-id="' + esc(c.id) + '"><b>' + esc(c.name) + '</b><span class="sr">, edit</span></button><span class="ppl__role">' + esc(c.role) + "</span>" +
+            (c.email ? '<a href="mailto:' + esc(c.email) + '">' + esc(c.email) + "</a>" : "") + "</li>";
+        }).join("") + "</ul></div>";
+      }).join("") + "</div></section>";
+  }
+
+  function viewPhd() {
+    var p = phd();
+    if (!p) return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>Your PhD plan needs the new backend. In the Apps Script editor, paste in the new <code>Code.gs</code>, run <b>setup</b> once, and deploy a new version (steps in the README). Then reload this page.</p></div></div>';
+    var next = phdNext(), nowT = termNow(), first = PHDCFG.firstYear || 2026, yr = Math.floor((nowT - (first * 3 + 2)) / 3) + 1;
+    var openQ = p.questions.filter(function (q) { return q.status !== "answered"; }).length;
+    var nextHtml = next.length ? '<ul class="nexts">' + next.slice(0, 4).map(function (m) {
+      return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + '<span class="sr">' + esc(M_STATUS[m.status] || "") + ": </span></span><span class=\"nexts__t\" tabindex=\"0\" data-peek=\"p:" + esc(m.id) + '">' + esc(m.title) + "</span></li>";
+    }).join("") + "</ul>" : '<p class="empty">Nothing coming up on the timeline.</p>';
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">PhD</h1><p>' + esc(PHDCFG.program || "") + (yr >= 1 && yr <= (PHDCFG.years || 5) ? ". Year " + yr + " of " + (PHDCFG.years || 5) : "") + (PHDCFG.expected ? ", graduating " + esc(PHDCFG.expected) : "") + ".</p></div>" +
+      '<section class="section" aria-labelledby="nx-h"><h2 id="nx-h">Coming up</h2>' + nextHtml +
+      (openQ ? '<p class="section__note"><a href="#pq-h" data-jump="pq-h">' + plural(openQ, "open question") + "</a> for your advisors.</p>" : "") + "</section>" +
+      requirementsHtml() + timelineHtml() + coursesHtml() + questionsHtml() + contactsHtml() +
+      '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p></div>';
+  }
+
+  /* The side column on This week: the next step or two, nothing more. */
+  function phdRail() {
+    var p = phd(); if (!p) return "";
+    var next = phdNext().slice(0, 2), openQ = p.questions.filter(function (q) { return q.status !== "answered"; }).length;
+    return '<section class="rail__sec" aria-labelledby="hp-h"><div class="rail__head"><h2 id="hp-h">PhD</h2></div>' +
+      (next.length ? '<ul class="nexts nexts--rail">' + next.map(function (m) { return '<li><span class="nexts__when">' + esc(mDateText(m)) + '</span><span class="nexts__t" tabindex="0" data-peek="p:' + esc(m.id) + '">' + esc(m.title) + "</span></li>"; }).join("") + "</ul>" : "") +
+      '<p class="rail__more"><a href="#/phd">Your PhD plan</a>' + (openQ ? ", " + plural(openQ, "open question") : "") + "</p></section>";
+  }
+
+  /* Edit forms, one shape for all four kinds. */
+  var PHD_FORMS = {
+    courses: { title: ["Add a course", "Edit course"], what: "course", fields: [
+      ["code", "Course number", "text", { required: true, hint: "For example CIVENG 203." }], ["title", "Title", "text"],
+      ["school", "School", "text", { half: 1 }], ["term", "Term", "text", { half: 2, hint: "For example Spring 2027." }],
+      ["units", "Units", "text", { half: 1 }], ["status", "Status", "select", { half: 2, opts: function () { return Object.keys(C_STATUS).map(function (k) { return [k, C_STATUS[k]]; }); } }],
+      ["field", "Counts toward", "select", { opts: function () { return [["", "Not placed yet"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["none", "Doesn't count toward the 30"]]); } }],
+      ["core", "Core area", "select", { half: 1, opts: function () { return [["", "None"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; })); } }],
+      ["de", "Designated Emphasis", "select", { half: 2, opts: function () { var m = (RULES.de || {}).modules || {}; return [["", "Doesn't count"], ["core", "Core course"]].concat(Object.keys(m).map(function (k) { return [k, "Elective, " + m[k]]; })).concat([["petition", "Elective by petition"]]); } }],
+      ["approval", "Approved by", "text", { hint: "Who said it counts, and when." }], ["notes", "Notes", "textarea"]] },
+    milestones: { title: ["Add a milestone", "Edit milestone"], what: "milestone", fields: [
+      ["title", "What", "text", { required: true }],
+      ["term", "Term", "text", { half: 1, hint: "Spring, Summer or Fall, and the year." }], ["date", "Date", "date", { half: 2, hint: "Optional." }],
+      ["category", "Kind", "select", { half: 1, opts: function () { return Object.keys(M_CAT).map(function (k) { return [k, M_CAT[k]]; }); } }],
+      ["status", "Status", "select", { half: 2, opts: function () { return Object.keys(M_STATUS).map(function (k) { return [k, M_STATUS[k]]; }); } }],
+      ["notes", "Notes", "textarea"], ["link", "Link", "url"]] },
+    questions: { title: ["Add a question", "Edit question"], what: "question", fields: [
+      ["question", "Question", "textarea", { required: true }], ["who", "Who to ask", "text", { half: 1 }],
+      ["status", "Status", "select", { half: 2, opts: function () { return [["open", "Open"], ["answered", "Answered"]]; } }],
+      ["answer", "What you know so far", "textarea"], ["asked", "Asked on", "date", { half: 1 }], ["link", "Link to the email", "url", { half: 2 }]] },
+    contacts: { title: ["Add a person", "Edit person"], what: "person", fields: [
+      ["name", "Name", "text", { required: true }], ["role", "Role", "text"], ["email", "Email", "email", { half: 1 }], ["group", "Group", "text", { half: 2, hint: "For example CEE or DevEng." }]] },
+    officeHours: { title: ["Add office hours", "Edit office hours"], what: "office hours", fields: [
+      ["name", "Who", "text", { required: true, half: 1 }], ["role", "Role", "text", { half: 2, hint: "For example Instructor or GSI." }],
+      ["courseId", "Course", "select", { half: 1, opts: function () { return [["", "No course"]].concat(visibleCourses().map(function (c) { return [c.id, c.shortName]; })); } }],
+      ["day", "Day", "select", { half: 2, opts: function () { return OH_DAYS.map(function (d) { return [d, OH_LONG[d]]; }); } }],
+      ["start", "Starts", "time", { required: true, half: 1 }], ["end", "Ends", "time", { required: true, half: 2 }],
+      ["place", "Where", "text", { half: 1, hint: "A room, or Zoom." }], ["link", "Link", "url", { half: 2, hint: "Zoom or sign-up link." }],
+      ["how", "How to join", "textarea"], ["notes", "Notes", "textarea"], ["source", "Where this came from", "url"]] }
+  };
+  function phdForm(kind, row) {
+    var F = PHD_FORMS[kind], editing = !!row; row = row || {};
+    var html = "", pending = null;
+    F.fields.forEach(function (f) {
+      var name = f[0], label = f[1], type = f[2], o = f[3] || {}, id = "ph-" + name, v = row[name] || "", ctl;
+      if (type === "select") ctl = '<select id="' + id + '" name="' + name + '">' + o.opts().map(function (x) { return '<option value="' + esc(x[0]) + '"' + (x[0] === v ? " selected" : "") + ">" + esc(x[1]) + "</option>"; }).join("") + "</select>";
+      else if (type === "textarea") ctl = '<textarea id="' + id + '" name="' + name + '"' + (o.required ? " required" : "") + ' style="min-height:90px">' + esc(v) + "</textarea>";
+      else ctl = '<input id="' + id + '" name="' + name + '" type="' + type + '"' + (o.required ? " required" : "") + ' value="' + esc(v) + '"' + (type === "url" ? ' placeholder="https://"' : "") + ">";
+      var fld = '<div class="field"><label for="' + id + '">' + esc(label) + "</label>" + ctl + (o.hint ? "<small>" + esc(o.hint) + "</small>" : "") + "</div>";
+      if (o.half === 1) pending = fld;
+      else if (o.half === 2) { html += '<div class="two">' + (pending || "") + fld + "</div>"; pending = null; }
+      else html += fld;
+    });
+    return '<form method="dialog">' + dlgHead(F.title[editing ? 1 : 0]) + '<div class="dlg__body">' + html + "</div>" +
+      '<div class="dlg__foot">' + (editing ? '<button type="button" class="btn btn--danger" data-act="delete-phd" data-kind="' + kind + '" data-id="' + esc(row.id) + '">Delete ' + F.what + "</button>" : "") +
+      '<button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn--solid">' + (editing ? "Save changes" : "Add " + F.what) + "</button></div></form>";
+  }
+  function savePhd(kind, existing, v) {
+    var row = Object.assign({}, existing || {}, v);
+    if (!existing) row.id = "";
+    return apiPost({ action: "saveRecord", kind: kind, row: row }).then(function (r) {
+      var saved = r.row || Object.assign(row, { id: row.id || newId({ courses: "pc", milestones: "pm", questions: "pq", contacts: "pp", officeHours: "oh" }[kind]) });
+      var list = recList(kind), i = list.findIndex(function (x) { return x.id === saved.id; });
+      if (i > -1) list[i] = saved; else list.push(saved);
+      refresh(); toast((existing ? "Saved" : "Added") + (r.demo ? " (demo, not saved)" : ""));
+    });
+  }
+  function confirmDeletePhd(kind, id) {
+    var row = byId(recList(kind), id); if (!row) return;
+    var name = row.code || row.title || row.question || row.name;
+    openDialog('<form method="dialog">' + dlgHead(kind === "officeHours" ? "Delete these office hours?" : "Delete this " + PHD_FORMS[kind].what + "?") + '<div class="dlg__body"><p><b>' + esc(name) + "</b> will be removed from the hub and from its tab in your Sheet" + (kind === "officeHours" && row.eventId ? ". Its weekly event stays on your Google Calendar; delete that there" : "") + ". This can't be undone.</p></div>" +
+      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep it</button><button type="submit" class="btn btn--solid">Delete</button></div></form>', function () {
+      return apiPost({ action: "deleteRecord", kind: kind, id: id }).then(function (r) {
+        var list = recList(kind), i = list.findIndex(function (x) { return x.id === id; }); if (i > -1) list.splice(i, 1);
+        refresh(); toast("Deleted" + (r.demo ? " (demo, not saved)" : ""));
+      });
+    });
+  }
+  function phdPeek(id) {
+    var p = phd(); if (!p) return "";
+    var m = byId(p.milestones, id);
+    if (m) return '<p class="peek__meta"><span>' + esc(M_CAT[m.category] || "") + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + esc(M_STATUS[m.status] || "") + "</span></p><p class=\"peek__title\">" + esc(m.title) + "</p>" +
+      '<p class="peek__when">' + esc(mDateText(m)) + "</p>" + (m.notes ? '<p class="peek__body">' + esc(m.notes) + "</p>" : "") + '<p class="peek__foot">From the PhD milestones tab.</p>';
+    var c = byId(p.courses, id);
+    if (c) return '<p class="peek__meta"><span class="st">' + shape(C_SHAPE[c.status] || "todo") + esc(C_STATUS[c.status] || "") + "</span><span>" + esc([c.school, c.term].filter(Boolean).join(", ")) + "</span></p><p class=\"peek__title\">" + esc(c.code + (c.title ? " " + c.title : "")) + "</p>" +
+      (c.units ? '<p class="peek__when">' + esc(fmtUnits(units(c))) + "</p>" : "") + (c.notes ? '<p class="peek__body">' + esc(c.notes) + "</p>" : "") + (c.approval ? '<p class="peek__foot">Approved: ' + esc(c.approval) + "</p>" : "");
+    return "";
+  }
+
+  /* ---------- office hours: everyone's weekly hours, by day and by course ---------- */
+  var OH_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  var OH_LONG = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" };
+  function ohList() { return (state.data.officeHours || []).filter(function (o) { return !o.courseId || !courseHidden(o.courseId); }); }
+  function hm12(t) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); if (!m) return String(t || "");
+    var h = +m[1], ap = h < 12 ? "AM" : "PM", h12 = h % 12 || 12;
+    return h12 + (m[2] === "00" ? "" : ":" + m[2]) + " " + ap;
+  }
+  function ohWhen(o) {
+    var a = hm12(o.start), b = hm12(o.end);
+    if (a.slice(-2) === b.slice(-2)) a = a.slice(0, -3);   // "1 to 2:30 PM", not "1 PM to 2:30 PM"
+    return a + " to " + b;
+  }
+  function todayShort() { return new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(new Date()); }
+  function nowHM() { var p = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()); return p; }
+  function ohState(o) {
+    if (o.day !== todayShort()) return "";
+    var n = nowHM(); return n >= o.start && n < o.end ? "now" : n >= o.end ? "past" : "later";
+  }
+  function ohSort(a, b) { return (OH_DAYS.indexOf(a.day) - OH_DAYS.indexOf(b.day)) || (a.start < b.start ? -1 : a.start > b.start ? 1 : 0); }
+  function ohPlace(o) {
+    var link = safeUrl(o.link);
+    return link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(o.place || "Link") + newTab() + "</a>" : esc(o.place || "");
+  }
+  function viewOfficeHours() {
+    var list = ohList().slice().sort(ohSort), today = todayShort();
+    var days = OH_DAYS.filter(function (d, i) { return i < 5 || list.some(function (o) { return o.day === d; }); });
+    var cols = days.map(function (d) {
+      var mine = list.filter(function (o) { return o.day === d; });
+      return '<section class="ohd' + (d === today ? " is-today" : "") + '" aria-labelledby="ohd-' + d + '"><h3 id="ohd-' + d + '" class="ohd__h">' + esc(OH_LONG[d]) + (d === today ? ' <b class="tl__now">Today</b>' : "") + "</h3>" +
+        (mine.length ? '<ul class="ohs">' + mine.map(function (o) {
+          var st = ohState(o), c = course(o.courseId);
+          return '<li class="oh' + (st ? " is-" + st : "") + '"><button type="button" class="oh__btn" data-act="edit-phd" data-kind="officeHours" data-id="' + esc(o.id) + '" data-peek="o:' + esc(o.id) + '">' +
+            '<span class="oh__time">' + esc(ohWhen(o)) + (st === "now" ? ' <b class="oh__now">Now</b>' : "") + '</span><span class="oh__who">' + esc(o.name) + "</span>" +
+            '<span class="oh__meta">' + (c ? cbadge(c, "sm") + " " : "") + esc(o.place || "") + "</span></button></li>";
+        }).join("") + "</ul>" : '<p class="empty empty--tight">None</p>') + "</section>";
+    }).join("");
+    var byCourse = {};
+    list.forEach(function (o) { (byCourse[o.courseId || ""] = byCourse[o.courseId || ""] || []).push(o); });
+    var courseIds = visibleCourses().map(function (c) { return c.id; }).filter(function (id) { return byCourse[id]; }).concat(byCourse[""] ? [""] : []);
+    var detail = courseIds.map(function (id) {
+      var c = course(id);
+      return '<div class="ohc"><h3 class="ohc__h">' + (c ? chip(c) + " <span>" + esc(c.name.replace(/\s*\(.*\)$/, "")) + "</span>" : "Other") + '</h3><ul class="ohc__list">' + byCourse[id].map(function (o) {
+        var src = safeUrl(o.source);
+        return '<li><p class="ohc__who"><b>' + esc(o.name) + "</b>" + (o.role ? ", " + esc(o.role) : "") + "</p>" +
+          '<p class="ohc__when">' + esc(OH_LONG[o.day] || o.day) + "s, " + esc(ohWhen(o)) + (o.place || o.link ? ". " + ohPlace(o) : "") + "</p>" +
+          (o.how ? '<p class="ohc__how">' + inline(o.how) + "</p>" : "") + (o.notes ? '<p class="ohc__note">' + inline(o.notes) + "</p>" : "") +
+          '<p class="ohc__foot">' + (src ? '<a href="' + esc(src) + '" target="_blank" rel="noopener">Where this came from' + newTab() + "</a> · " : "") +
+          '<button type="button" class="linkbtn" data-act="edit-phd" data-kind="officeHours" data-id="' + esc(o.id) + '">Edit<span class="sr"> ' + esc(o.name) + "'s hours</span></button></p></li>";
+      }).join("") + "</ul></div>";
+    }).join("");
+    var until = cfg.lastInstruction ? fmtDay(new Date(zonedIso(cfg.lastInstruction, "12:00")), true) : "";
+    return '<div class="wrap"><div class="head"><h1 tabindex="-1">Office hours</h1><p>Every week' + (until ? " through the last day of instruction, " + esc(until) : "") + ". Each one is also a weekly event on your Google Calendar, marked as free so it doesn't block your time. Point at one for how to join.</p></div>" +
+      (list.length ? '<section class="section" aria-labelledby="ohw-h"><div class="h-row"><h2 id="ohw-h">By day</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="officeHours">Add office hours</button></div><div class="ohweek">' + cols + "</div></section>" +
+        '<section class="section" aria-labelledby="ohc-h"><h2 id="ohc-h">By course</h2>' + detail + "</section>"
+        : state.data.officeHours ? '<p class="empty">No office hours yet. <button type="button" class="btn btn--sm" data-act="new-phd" data-kind="officeHours">Add office hours</button></p>'
+        : '<p class="empty">Office hours need the new backend. In the Apps Script editor, paste in the new <code>Code.gs</code>, run <b>setup</b> once, and deploy a new version.</p>') +
+      '<p class="section__note">These live in the "Office hours" tab of your Google Sheet. Changing one here doesn\'t move its Google Calendar event; change that in Google Calendar.</p></div>';
+  }
+  function ohRail() {
+    var today = todayShort(), list = ohList().filter(function (o) { return o.day === today && ohState(o) !== "past"; }).sort(ohSort);
+    if (!list.length) return "";
+    return '<section class="rail__sec" aria-labelledby="ho-h"><div class="rail__head"><h2 id="ho-h">Office hours today</h2></div><ul class="nexts nexts--rail">' + list.map(function (o) {
+      var c = course(o.courseId);
+      return '<li><span class="nexts__when">' + esc(ohWhen(o)) + (ohState(o) === "now" ? " · Now" : "") + '</span><span class="nexts__t" tabindex="0" data-peek="o:' + esc(o.id) + '">' + (c ? cbadge(c, "sm") + " " : "") + esc(o.name) + "</span></li>";
+    }).join("") + '</ul><p class="rail__more"><a href="#/hours">All office hours</a></p></section>';
+  }
+  function ohPeek(id) {
+    var o = byId(state.data.officeHours || [], id); if (!o) return "";
+    var c = course(o.courseId);
+    return '<p class="peek__meta">' + chip(c) + (o.role ? "<span>" + esc(o.role) + "</span>" : "") + '</p><p class="peek__title">' + esc(o.name) + "</p>" +
+      '<p class="peek__when">' + esc(OH_LONG[o.day] || o.day) + "s, " + esc(ohWhen(o)) + (o.place ? ". " + esc(o.place) : "") + "</p>" +
+      (o.how ? '<p class="peek__body">' + esc(o.how) + "</p>" : "") + (o.notes ? '<p class="peek__body">' + esc(o.notes) + "</p>" : "") + '<p class="peek__foot">Click to edit.</p>';
+  }
   var EMAIL_OPTS = [["daily", "Daily", "Only on days something is due soon, overdue, new or announced"], ["weekly", "Mondays only", "One email with the whole week"], ["off", "Off", "No emails"]];
   function viewAbout() {
     var s = state.data.settings, cur = s.emailPref || "daily";
@@ -718,7 +1108,7 @@
       ? '<p class="conn conn--on">' + shape("done") + "<span><b>Connected</b>" + (state.data.me.name ? " as " + esc(state.data.me.name) : "") + (since ? ", token added " + esc(since) : "") + ". Last read " + esc(last) + ".</span></p>"
       : '<p class="conn">' + shape("todo") + "<span><b>Not connected yet.</b> Paste a bCourses token below to start.</span></p>";
     var steps = '<ol class="steps token-steps"><li>In bCourses, open <b>Account</b>, then <b>Settings</b>.</li>' +
-      '<li>Under Approved Integrations, choose <b>New Access Token</b>. For Purpose write "Classes Hub", and set the expiry after the semester ends (' + esc(fmtDay(semester().end, true)) + ").</li>" +
+      '<li>Under Approved Integrations, choose <b>New Access Token</b>. For Purpose write "Berkeley Hub", and set the expiry after the semester ends (' + esc(fmtDay(semester().end, true)) + ").</li>" +
       "<li>Copy the token bCourses shows (it starts with a number and a ~) and paste it here. bCourses only shows it once.</li></ol>";
     var form = '<form class="token-form" id="token-form" autocomplete="off">' +
       '<div class="field"><label for="token-input">' + (connected ? "Replace the bCourses token" : "bCourses token") + "</label>" +
@@ -839,7 +1229,7 @@
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     if (!state.data) return;
-    var html, title = "Classes Hub";
+    var html, title = "Berkeley Hub";
     if (view === "c") { var c = course(h[1]); html = viewCourse(h[1]); if (c) title = c.shortName; }
     else if (view === "i") { var it = byId(state.data.items, h[1]); html = viewItem(h[1]); if (it) title = it.title; }
     else if (view === "all") { html = viewAll(); title = "All work"; }
@@ -847,10 +1237,12 @@
     else if (view === "d") { html = viewDay(h[1]); var dd = dayFromIso(h[1]); if (!isNaN(dd)) title = fmtLongDay(noonOf(dd)); }
     else if (view === "news") { html = viewNews(); title = "Announcements"; }
     else if (view === "about") { html = viewAbout(); title = "About and settings"; }
+    else if (view === "phd") { html = viewPhd(); title = "PhD"; }
+    else if (view === "hours") { html = viewOfficeHours(); title = "Office hours"; }
     else { html = viewHome(); }
     hidePeek(true);
     main.innerHTML = html;
-    document.title = title + (title === "Classes Hub" ? "" : " | Classes Hub");
+    document.title = title + (title === "Berkeley Hub" ? "" : " | Berkeley Hub");
     var h1 = main.querySelector("h1");
     if (route._moved && h1 && !route._keepFocus) h1.focus({ preventScroll: true });
     route._moved = true;
@@ -1006,6 +1398,8 @@
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
   });
   document.addEventListener("click", function (ev) {
+    var j = ev.target.closest && ev.target.closest("[data-jump]");
+    if (j) { ev.preventDefault(); var to = document.getElementById(j.getAttribute("data-jump")); if (to) { to.setAttribute("tabindex", "-1"); to.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" }); to.focus({ preventScroll: true }); } return; }
     var r = ev.target.closest && ev.target.closest("[data-read]");
     if (r) { markRead(r.getAttribute("data-read")); setTimeout(refresh, 50); return; }
     if (ev.target.closest && ev.target.closest(".news__more summary")) { var li = ev.target.closest(".news__item"), a = li && li.querySelector("[data-read]"); if (a) { markRead(a.getAttribute("data-read")); var t = li.querySelector(".readtag"); if (t) t.outerHTML = readTag({ id: a.getAttribute("data-read"), read: "yes" }); li.classList.add("is-read"); li.classList.remove("is-new"); } }
@@ -1036,6 +1430,9 @@
     }
     if (act === "save-calendars") saveCalendars(b);
     if (act === "mark-all-read") markAllRead();
+    if (act === "new-phd") { var k0 = b.getAttribute("data-kind"); openDialog(phdForm(k0, null), function (v) { return savePhd(k0, null, v); }); }
+    if (act === "edit-phd") { var k1 = b.getAttribute("data-kind"), row1 = byId(recList(k1), id); if (row1) openDialog(phdForm(k1, row1), function (v) { return savePhd(k1, row1, v); }); }
+    if (act === "delete-phd") { ev.preventDefault(); var d2 = b.closest("dialog"); if (d2) d2.close(); confirmDeletePhd(b.getAttribute("data-kind"), id); }
     if (act === "cal-prev" || act === "cal-next" || act === "cal-today") {
       var p0 = parts(new Date()), cur = calMonth || { y: +p0.year, m: +p0.month };
       if (act === "cal-today") calMonth = null;
@@ -1106,6 +1503,8 @@
       if (!M) return "";
       return '<p class="peek__title">' + esc(M[0]) + '</p><p class="peek__body">' + esc(M[1]) + "</p>" + (M[2] ? '<p class="peek__foot">' + esc(M[2]) + "</p>" : "");
     }
+    if (kind === "p") return phdPeek(id);
+    if (kind === "o") return ohPeek(id);
     if (kind === "e") {
       var e = byId(gcal().events, id); if (!e) return "";
       return '<p class="peek__meta"><span>' + esc(e.calendar) + "</span>" + (e.tentative ? "<span>Maybe</span>" : "") + "</p><p class=\"peek__title\">" + esc(e.title) + "</p>" +
@@ -1220,7 +1619,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261006051712";
+  var BUILD = "20261007020047";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
