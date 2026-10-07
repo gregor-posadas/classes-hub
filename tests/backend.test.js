@@ -255,4 +255,10 @@ t('cleanPhdRow checks office hours times and days', () => {
   assert.throws(() => ctx.cleanPhdRow('officeHours', { name: 'A', day: 'Tuesday', start: '13:00', end: '14:00' }, () => 'oh-1'), /isn't one of/);
 });
 
+t('cleanPhdRow keeps a fellowship\'s letters, one recommender per line', () => {
+  const letters = 'Recommender A: submitted\nRecommender B: waiting\n' + 'x'.repeat(400);
+  const r = ctx.cleanPhdRow('fellowships', { name: 'A fellowship', status: 'in-progress', letters }, () => 'pf-1');
+  assert.strictEqual(r.letters, letters);
+});
+
 console.log(n + ' checks passed');

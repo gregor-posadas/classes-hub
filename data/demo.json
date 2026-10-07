@@ -950,7 +950,8 @@
     "link": "",
     "todo": "Submit; remind recommenders a week before.",
     "notes": "",
-    "order": "1"
+    "order": "1",
+    "letters": "Sample recommender A: submitted\nSample recommender B: waiting\nSample recommender C: waiting"
    },
    {
     "id": "pf-2",
@@ -964,7 +965,8 @@
     "link": "",
     "todo": "Start the application.",
     "notes": "",
-    "order": "2"
+    "order": "2",
+    "letters": "Sample recommender A: not asked"
    },
    {
     "id": "pf-3",
@@ -978,7 +980,8 @@
     "link": "",
     "todo": "",
     "notes": "",
-    "order": "3"
+    "order": "3",
+    "letters": "Sample recommender A: submitted\nSample recommender B: submitted"
    },
    {
     "id": "pf-4",

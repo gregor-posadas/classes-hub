@@ -35,7 +35,7 @@ var TABS = {
   'PhD contacts': ['id', 'name', 'role', 'email', 'group'],
   'PhD links': ['id', 'label', 'url', 'notes', 'order'],
   'PhD programs': ['id', 'program', 'title', 'date', 'time', 'kind', 'required', 'status', 'link', 'notes', 'order'],
-  'PhD fellowships': ['id', 'name', 'sponsor', 'status', 'deadline', 'time', 'dates', 'amount', 'link', 'todo', 'notes', 'order'],
+  'PhD fellowships': ['id', 'name', 'sponsor', 'status', 'deadline', 'time', 'dates', 'amount', 'link', 'todo', 'notes', 'order', 'letters'],
   'Office hours': ['id', 'courseId', 'name', 'role', 'day', 'start', 'end', 'place', 'link', 'how', 'notes', 'source', 'eventId']
 };
 
@@ -766,7 +766,7 @@ function cleanPhdRow(kind, input, makeId) {
   var spec = PHD[kind];
   if (!spec) throw new Error('Unknown kind of record.');
   var head = TABS[spec.tab], row = {};
-  head.forEach(function (h) { row[h] = String(input[h] === undefined || input[h] === null ? '' : input[h]).trim().slice(0, h === 'notes' || h === 'answer' ? 3000 : 300); });
+  head.forEach(function (h) { row[h] = String(input[h] === undefined || input[h] === null ? '' : input[h]).trim().slice(0, h === 'notes' || h === 'answer' || h === 'letters' ? 3000 : 300); });
   if (!row[spec.need]) throw new Error('Fill in the ' + spec.need + ' first.');
   Object.keys(spec.choices).forEach(function (h) {
     var ok = spec.choices[h];

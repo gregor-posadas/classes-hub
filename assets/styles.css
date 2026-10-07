@@ -920,3 +920,12 @@ a.evt__title:hover { text-decoration: underline; }
 .demodc__k { font-weight: 700; overflow-wrap: anywhere; }
 .demodc .st, .demodc small { font-size: var(--f1); }
 .demodc small { color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* ---------- letters of recommendation ---------- */
+.lt__sum { margin: 0 0 2px; font-size: var(--f1); font-weight: 700; }
+.lt { list-style: none; margin: 0; padding: 0; }
+.lt li { display: flex; align-items: flex-start; gap: 6px; font-size: var(--f1); padding: 1px 0; }
+.lt li .st { flex: none; }
+.lt li .st__shape { width: 15px; height: 15px; margin-top: 2px; }
+.ftbl td .lt small { display: inline; color: var(--ink-2); white-space: nowrap; }
+.lt small::before { content: "· "; }

@@ -764,6 +764,22 @@
   var F_SHAPE = { "to-start": "todo", "in-progress": "doing", submitted: "done", planned: "todo", idea: "todo", "not-eligible": "todo", awarded: "done", declined: "todo" };
   var F_OPEN = { "to-start": 1, "in-progress": 1, idea: 1 };
   function fellows() { var p = phd(); return (p && p.fellowships) || []; }
+  /* Letters of recommendation, kept one per line as "Name: status" (submitted, waiting, not asked, declined). */
+  var L_WORD = { submitted: "Submitted", waiting: "Waiting", "not asked": "Not asked yet", declined: "Declined" };
+  var L_SHAPE = { submitted: "done", waiting: "soon", "not asked": "todo", declined: "late" };
+  function letters(f) {
+    return String(f.letters || "").split(/[;\n]+/).map(function (x) {
+      var m = /^(.*?)\s*[:\u2013-]\s*(submitted|waiting|not asked( yet)?|declined)\s*$/i.exec(x.trim());
+      return x.trim() ? (m ? { who: m[1], st: m[2].toLowerCase().replace(" yet", "") } : { who: x.trim(), st: "waiting" }) : null;
+    }).filter(Boolean);
+  }
+  function lettersHtml(f) {
+    var L = letters(f); if (!L.length) return "";
+    var inn = L.filter(function (l) { return l.st === "submitted"; }).length;
+    return '<p class="lt__sum">' + inn + " of " + L.length + ' in</p><ul class="lt">' + L.map(function (l) {
+      return '<li><span class="st">' + shape(L_SHAPE[l.st] || "todo") + '<span class="sr">' + esc(L_WORD[l.st] || l.st) + ": </span></span>" + '<span>' + esc(l.who) + ' <small>' + esc(L_WORD[l.st] || l.st) + "</small></span></li>";
+    }).join("") + "</ul>";
+  }
   function fDays(f) { return f.deadline ? dayFromIso(f.deadline) - dayNumber(new Date()) : NaN; }
   function fTime(f) { return f.time && !/not stated/i.test(f.time) ? f.time : ""; }
   function fRel(f) {
@@ -786,11 +802,12 @@
         "<td>" + (f.deadline ? '<b class="nowrap">' + esc(fmtDay(noonOf(dayFromIso(f.deadline)), dayFromIso(f.deadline) < dayNumber(new Date()) - 180 || dayFromIso(f.deadline) > dayNumber(new Date()) + 300)) + "</b>" : esc(f.time || "No date yet")) + (f.deadline && fTime(f) ? "<small>" + esc(fTime(f)) + "</small>" : "") +
         (rel ? '<small class="' + (urgent ? "fdue--soon" : rel === "Passed" ? "fdue--late" : "") + '">' + esc(rel) + "</small>" : "") + "</td>" +
         '<td><span class="st">' + shape(urgent ? "soon" : F_SHAPE[f.status] || "todo") + esc(F_STATUS[f.status] || f.status) + "</span>" + (f.amount ? "<small>" + esc(f.amount) + "</small>" : "") + "</td>" +
+        "<td>" + lettersHtml(f) + "</td>" +
         "<td>" + esc(f.todo || "") + "</td>" +
         '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="fellowships" data-id="' + esc(f.id) + '">Edit<span class="sr"> ' + esc(f.name) + "</span></button></td></tr>";
     };
     return '<section class="section" aria-labelledby="pf-h"><div class="h-row"><h2 id="pf-h">Fellowships' + (soon ? ' <span class="h-count">' + soon + " due in the next month</span>" : "") + '</h2><button type="button" class="btn btn--sm" data-act="new-phd" data-kind="fellowships">Add a fellowship</button></div>' +
-      (list.length ? '<table class="pm-table ftbl"><caption class="sr">Fellowships, soonest deadline first</caption><thead><tr><th scope="col">Fellowship</th><th scope="col">Deadline</th><th scope="col">Status</th><th scope="col">To do</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' +
+      (list.length ? '<table class="pm-table ftbl"><caption class="sr">Fellowships, soonest deadline first</caption><thead><tr><th scope="col">Fellowship</th><th scope="col">Deadline</th><th scope="col">Status</th><th scope="col">Letters</th><th scope="col">To do</th><th scope="col"><span class="sr">Edit</span></th></tr></thead><tbody>' +
         list.map(row).join("") + "</tbody></table>" : '<p class="empty">No fellowships yet.</p>') +
       '<p class="section__note">Times are as each sponsor gives them. Point at a name for the other dates and notes.</p></section>';
   }
@@ -1197,7 +1214,10 @@
       card("de", "Designated Emphasis", esc(st.n.done + " of " + st.total + " courses done"), esc(st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : ""))) +
       card("planner", "Planner", "Try a semester", "Drag courses in and check them against your requirements") +
       card("timeline", "Timeline", nextExam ? esc(nextExam.title) : "Five years", nextExam ? esc(mDateText(nextExam)) : "By year and term") +
-      card("funding", "Fellowships", esc(plural(fel.length, "deadline")) + " this month", "Applications and their dates") +
+      card("funding", "Fellowships", esc(plural(fel.length, "deadline")) + " this month", (function () {
+        var w = 0; fellows().forEach(function (f) { if (F_OPEN[f.status]) letters(f).forEach(function (l) { if (l.st === "waiting") w++; }); });
+        return w ? esc(plural(w, "letter")) + " still to come in" : "Applications and their dates";
+      })()) +
       (prog ? (function () {
         var items = p.programs.filter(function (x) { return x.program === prog.program; }), today = dayNumber(new Date());
         var went = items.filter(function (x) { return x.kind === "session" && x.status === "attended"; }).length;
@@ -1442,7 +1462,8 @@
       ["status", "Status", "select", { half: 1, opts: function () { return Object.keys(F_STATUS).map(function (k) { return [k, F_STATUS[k]]; }); } }],
       ["deadline", "Deadline", "date", { half: 2 }],
       ["time", "Time", "text", { half: 1, hint: "As the sponsor gives it, for example 5:00 PM ET." }], ["amount", "Award", "text", { half: 2 }],
-      ["dates", "Other dates", "textarea", { hint: "Letters, interviews, decisions." }], ["todo", "To do", "text"], ["link", "Link", "url"], ["notes", "Notes", "textarea"]] },
+      ["dates", "Other dates", "textarea", { hint: "Letters, interviews, decisions." }],
+      ["letters", "Letters of recommendation", "textarea", { hint: "One recommender per line, then a colon and submitted, waiting, not asked or declined. For example: Dr. Sondra Miller: submitted" }], ["todo", "To do", "text"], ["link", "Link", "url"], ["notes", "Notes", "textarea"]] },
     officeHours: { title: ["Add office hours", "Edit office hours"], what: "office hours", fields: [
       ["name", "Who", "text", { required: true, half: 1 }], ["role", "Role", "text", { half: 2, hint: "For example Instructor or GSI." }],
       ["courseId", "Course", "select", { half: 1, opts: function () { return [["", "No course"]].concat(visibleCourses().map(function (c) { return [c.id, c.shortName]; })); } }],
@@ -1497,7 +1518,7 @@
     var f = byId(fellows(), id);
     if (f) return '<p class="peek__meta"><span class="st">' + shape(F_SHAPE[f.status] || "todo") + esc(F_STATUS[f.status] || "") + "</span>" + (f.amount ? "<span>" + esc(f.amount) + "</span>" : "") + '</p><p class="peek__title">' + esc(f.name) + "</p>" +
       '<p class="peek__when">' + (f.deadline ? esc(fmtLongDay(noonOf(dayFromIso(f.deadline)))) + (fTime(f) ? ", " + esc(fTime(f)) : "") + ". " + esc(fRel(f)) : esc(f.time || "No date yet")) + "</p>" +
-      (f.dates ? '<p class="peek__body">' + esc(f.dates) + "</p>" : "") + (f.todo ? '<p class="peek__body"><b>To do:</b> ' + esc(f.todo) + "</p>" : "") + (f.notes ? '<p class="peek__foot">' + esc(f.notes) + "</p>" : "");
+      (f.dates ? '<p class="peek__body">' + esc(f.dates) + "</p>" : "") + (letters(f).length ? '<p class="peek__body"><b>Letters:</b> ' + esc(letters(f).map(function (l) { return l.who + ", " + (L_WORD[l.st] || l.st).toLowerCase(); }).join("; ")) + "</p>" : "") + (f.todo ? '<p class="peek__body"><b>To do:</b> ' + esc(f.todo) + "</p>" : "") + (f.notes ? '<p class="peek__foot">' + esc(f.notes) + "</p>" : "");
     var m = byId(p.milestones, id);
     if (m) return '<p class="peek__meta"><span>' + esc(M_CAT[m.category] || "") + '</span><span class="st">' + shape(M_SHAPE[m.status] || "todo") + esc(M_STATUS[m.status] || "") + "</span></p><p class=\"peek__title\">" + esc(m.title) + "</p>" +
       '<p class="peek__when">' + esc(mDateText(m)) + "</p>" + (m.notes ? '<p class="peek__body">' + esc(m.notes) + "</p>" : "") + '<p class="peek__foot">From the PhD milestones tab.</p>';
@@ -2169,7 +2190,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007055014";
+  var BUILD = "20261007061233";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
