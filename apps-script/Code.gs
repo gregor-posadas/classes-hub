@@ -153,10 +153,25 @@ function doGet(e) {
       checkCode(p.code);
       return json({ ok: true, data: cachedPayload() });
     }
+    if (p.action === 'form') {
+      checkCode(p.code);
+      return json({ ok: true, b64: officialForm(p.name) });
+    }
     return json({ ok: true, service: APP_NAME });
   } catch (err) {
     return json({ ok: false, error: err.message, code: err.codeType || '' });
   }
+}
+
+/* Official forms the hub fills in. The department's site doesn't let other sites load its PDFs,
+   so the backend fetches the blank form and hands it to the hub. Only these addresses are allowed. */
+var FORMS = { bluecard: 'https://ce.berkeley.edu/sites/default/files/assets/aao/BlueCard.pdf' };
+function officialForm(name) {
+  var url = FORMS[name];
+  if (!url) throw new Error('Unknown form.');
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  if (res.getResponseCode() !== 200) throw new Error('The department site answered ' + res.getResponseCode() + ' for that form.');
+  return Utilities.base64Encode(res.getContent());
 }
 
 function doPost(e) {
