@@ -1517,7 +1517,11 @@
         put("BS degree from", info("bsFrom")); put("in", info("bsIn")); put("date", info("bsDate")); put("MS degree from", info("msFrom")); put("in_2", info("msIn")); put("date_2", info("msDate"));
         var row = function (block, n, c) {
           var sfx = n === 1 ? "" : "_" + n, e = s.edits[c.id] || {};
-          put("Course NumberTitle" + block + sfx, c.code + (c.title ? " " + c.title : ""), 8);
+          // Long titles lose words from the end so the text stays at a readable size (6 pt or more).
+          var nm = "Course NumberTitle" + block + sfx, words = String(c.title || "").split(/\s+/).filter(Boolean), txt = c.code + (words.length ? " " + words.join(" ") : ""), fw = 0;
+          try { fw = form.getTextField(nm).acroField.getWidgets()[0].getRectangle().width - 4; } catch (e2) { fw = 0; }
+          while (fw && words.length && font.widthOfTextAtSize(txt, 6) > fw) { words.pop(); txt = c.code + (words.length ? " " + words.join(" ") + "…" : ""); }
+          put(nm, txt, 8);
           put("School" + block + sfx, c.school || "UC Berkeley", 8);
           put("Completed" + block + sfx, c.status === "done" ? (c.term || "Yes") : c.status === "in-progress" ? "In progress" : "Planned", 8);
           put("Units" + block + sfx, c.units || "", 8); put("Grade" + block + sfx, e.grade || "", 8);
@@ -2399,7 +2403,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007071534";
+  var BUILD = "20261007073024";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
