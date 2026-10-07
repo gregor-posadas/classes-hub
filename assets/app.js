@@ -1163,7 +1163,7 @@
   }
 
   /* ---------- the PhD pages: an overview, plus one page per part, linked by a row of tabs ---------- */
-  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Fellowships"], ["p2p", "Path to the Professoriate"], ["people", "Questions and people"]];
+  var PHD_PAGES = [["", "Overview"], ["coursework", "Coursework"], ["bluecard", "Blue Card"], ["de", "Designated Emphasis"], ["planner", "Planner"], ["timeline", "Timeline"], ["funding", "Fellowships"], ["p2p", "Path to the Professoriate"], ["people", "Questions and people"]];
   function phdTitle(sub) { var m = PHD_PAGES.filter(function (x) { return x[0] === (sub || ""); })[0]; return m ? m[1] : "PhD"; }
   function phdTabs(sub) {
     return '<nav class="ptabs" aria-label="PhD pages"><ul>' + PHD_PAGES.map(function (x) {
@@ -1179,8 +1179,10 @@
     var foot = '<p class="section__note">All of this lives in the "PhD" tabs of your Google Sheet. Edits here save there, and edits there show here at the next load.</p>';
     var docBtn = function (id, label) { var l = byId(p.links || [], id), u = l ? safeUrl(l.url) : ""; return u ? '<a class="btn btn--sm" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(label) + newTab() + "</a>" : ""; };
     if (sub === "coursework") return '<div class="wrap">' + phdHead(sub, "Your Program of Study: 30 units across the major, two minors and flexible units, plus the core areas.") +
-      '<div class="toolbar toolbar--tight">' + docBtn("pl-bluecard", "Blue Card form") + docBtn("pl-posform", "Program of Study form") + '<a class="btn btn--sm" href="#/phd/planner">Try a plan in the planner</a></div>' +
+      '<div class="toolbar toolbar--tight">' + '<a class="btn btn--sm btn--solid" href="#/phd/bluecard">Fill in the Blue Card</a>' + docBtn("pl-bluecard", "Blue Card form (PDF)") + docBtn("pl-posform", "Program of Study form") + '<a class="btn btn--sm" href="#/phd/planner">Try a plan in the planner</a></div>' +
       requirementsHtml() + coursesHtml() + foot + "</div>";
+    if (sub === "bluecard") return '<div class="wrap wrap--bc">' + phdHead(sub, "Your Tentative Program of Study. Drag courses into the major and minors (or use each course's menu), and the card below fills itself in. Made for filling out with your advisor.") +
+      '<div class="toolbar toolbar--tight">' + docBtn("pl-bluecard", "The official form (PDF)") + "</div>" + blueCardHtml() + "</div>";
     if (sub === "de") return '<div class="wrap">' + phdHead(sub, "Development Engineering: five courses and a few steps, separate from your minors.") + deSectionHtml() + deOptionsHtml() + foot + "</div>";
     if (sub === "planner") return '<div class="wrap">' + phdHead(sub, "Drag courses into semesters, or use each course's menu, and the checks on the right update as you go. Nothing here changes your plan until you save it.") + plannerHtml() + "</div>";
     if (sub === "timeline") return '<div class="wrap">' + phdHead(sub, "Year by year, from your research plan and emails.") + timelineHtml() + foot + "</div>";
@@ -1212,6 +1214,7 @@
     return '<section class="section" aria-labelledby="pc2-h"><h2 id="pc2-h">Your PhD, part by part</h2><ul class="pcards">' +
       card("coursework", "Coursework", esc(placed + " of " + need), esc(parts.done + " units done, " + parts.doing + " in progress, " + parts.planned + " planned")) +
       card("de", "Designated Emphasis", esc(st.n.done + " of " + st.total + " courses done"), esc(st.n.doing + " in progress, " + st.n.planned + " planned" + (st.n.open ? ", " + st.n.open + " to pick" : ""))) +
+      (function () { var on = bcCourses().filter(function (c) { return c.sec; }).reduce(function (n, c) { return n + units(c); }, 0); return card("bluecard", "Blue Card", esc(on + " of " + need + " units"), "Fill it in with your advisor"); })() +
       card("planner", "Planner", "Try a semester", "Drag courses in and check them against your requirements") +
       card("timeline", "Timeline", nextExam ? esc(nextExam.title) : "Five years", nextExam ? esc(mDateText(nextExam)) : "By year and term") +
       card("funding", "Fellowships", esc(plural(fel.length, "deadline")) + " this month", (function () {
@@ -1414,6 +1417,138 @@
           if (i > -1) list[i] = saved; else list.push(saved);
         }); });
       }, Promise.resolve()).then(function () { simSave({ place: {}, custom: [] }); refresh(); toast("Plan saved" + (state.demo ? " (demo, not saved)" : "")); });
+    });
+  }
+
+  /* ---------- the Blue Card (Tentative Program of Study): sort courses into the major and minors, and the card fills itself in ----------
+     Placements, added courses, the header details and anything typed on the card stay on this device until "Save" writes the
+     placements back to your courses. Personal details (SID, address, phone) never leave this device. */
+  var BC_SECS = ["major", "minor-a", "minor-b", "flexible"];
+  function bcLoad() {
+    try { var s = JSON.parse(store.get("bluecard") || "{}"); } catch (e) { s = {}; }
+    s.place = s.place || {}; s.custom = s.custom || []; s.info = s.info || {}; s.edits = s.edits || {}; return s;
+  }
+  function bcSave(s) { store.set("bluecard", JSON.stringify(s)); }
+  function bcLabel(k) { var f = byKey2(RULES.fields || [], k); return f ? f.label : k === "" ? "Not on the card" : k; }
+  function byKey2(list, k) { return list.filter(function (x) { return x.key === k; })[0] || null; }
+  function bcCourses() {
+    var s = bcLoad();
+    return phd().courses.filter(function (c) { return c.status !== "dropped"; })
+      .concat(s.custom.map(function (c) { return Object.assign({ status: "idea", custom: true, school: "UC Berkeley" }, c); }))
+      .map(function (c) {
+        var x = Object.assign({}, c);
+        if (Object.prototype.hasOwnProperty.call(s.place, c.id)) x.sec = s.place[c.id];
+        else x.sec = BC_SECS.indexOf(c.field) > -1 && counted(c) ? c.field : "";
+        return x;
+      });
+  }
+  function bcDone(c) { return c.status === "done" ? (c.term || "Done") : c.status === "in-progress" ? "In progress" + (c.term ? ", " + c.term : "") : "Planned" + (c.term ? ", " + c.term : ""); }
+  function bcCard(c) {
+    var mods = (RULES.de || {}).modules || {};
+    var tags = [c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "", isCEE(c) ? "CEE" : "", c.school && c.school !== "UC Berkeley" ? c.school : ""].filter(Boolean);
+    var opts = [["", "Not on the card"]].concat(BC_SECS.map(function (k) { return [k, bcLabel(k)]; })).map(function (o) { return '<option value="' + esc(o[0]) + '"' + (c.sec === o[0] ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("");
+    return '<li class="pcrd' + (c.custom ? " is-custom" : "") + '" draggable="true" data-bc-id="' + esc(c.id) + '">' +
+      '<p class="pcrd__t"><b>' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
+      (c.title ? '<p class="pcrd__n">' + esc(c.title) + "</p>" : "") +
+      '<p class="pcrd__s">' + esc(bcDone(c)) + "</p>" +
+      (tags.length ? '<p class="pcrd__tags">' + tags.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") + "</p>" : "") +
+      '<p class="pcrd__move"><label class="sr" for="bm-' + esc(c.id) + '">Put ' + esc(c.code) + ' in</label><select id="bm-' + esc(c.id) + '" data-bc-move="' + esc(c.id) + '">' + opts + "</select>" +
+      (c.custom ? ' <button type="button" class="linkbtn" data-act="bc-drop" data-id="' + esc(c.id) + '">Remove</button>' : "") + "</p></li>";
+  }
+  function bcChecks(list) {
+    var fields = RULES.fields || [], need = RULES.total || 30, total = 0, out = "";
+    fields.forEach(function (f) {
+      var here = list.filter(function (c) { return c.sec === f.key; }), u = here.reduce(function (n, c) { return n + units(c); }, 0); total += u;
+      out += check(u >= f.min ? (here.every(function (c) { return c.status === "done"; }) ? true : "doing") : false, "<b>" + esc(f.label) + "</b>: " + fmtUnits(u) + " of " + f.min, u >= f.min ? "" : fmtUnits(f.min - u) + " short.");
+    });
+    var minors = ["minor-a", "minor-b"].map(function (k) { return list.filter(function (c) { return c.sec === k; }); });
+    var outside = minors.filter(function (m) { return m.length && m.every(function (c) { return !isCEE(c); }); }).length;
+    var envIn = minors[0].concat(minors[1]).filter(isEnvECore), deIn = minors[0].concat(minors[1]).filter(function (c) { return c.de; });
+    out += check(outside ? true : false, "At least one minor fully outside CEE", outside ? "" : "Neither minor is outside CEE yet.") +
+      check(envIn.length ? "warn" : true, "No environmental engineering courses in a minor", envIn.length ? "Move " + esc(envIn.map(function (c) { return c.code; }).join(", ")) + "." : "") +
+      (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". CEE has no limit on courses counting toward both (Sara, Sep 4); ask Yael whether the DE has one.") : "");
+    return '<h3 class="rq__h">' + fmtUnits(total) + " of " + need + " on the card</h3>" + unitBar({ done: 0, doing: 0, planned: total, sum: total }, need, "Units on the card") + '<ul class="rqs rqs--tight">' + out + "</ul>";
+  }
+  function bcInfo(s, key, label, opts) {
+    opts = opts || {};
+    var v = s.info[key] !== undefined ? s.info[key] : (opts.dflt || "");
+    return '<label class="bc-f' + (opts.wide ? " bc-f--wide" : "") + '"><span>' + esc(label) + '</span><input data-bc-info="' + esc(key) + '" value="' + esc(v) + '"' + (opts.ph ? ' placeholder="' + esc(opts.ph) + '"' : "") + "></label>";
+  }
+  function bcRow(c, s) {
+    var e = s.edits[c.id] || {}, val = function (k, d) { return e[k] !== undefined ? e[k] : d; };
+    var cell = function (k, d, lab, cls) { return '<td class="' + (cls || "") + '"><input data-bc-edit="' + esc(c.id) + '" data-col="' + k + '" aria-label="' + esc(lab + ", " + c.code) + '" value="' + esc(val(k, d)) + '"></td>'; };
+    return "<tr>" + cell("course", c.code + (c.title ? " " + c.title : ""), "Course number and title") + cell("school", c.school || "UC Berkeley", "School") +
+      cell("done", c.status === "done" ? (c.term || "") : c.status === "in-progress" ? "In progress" : "Planned", "Completed") + cell("units", c.units || "", "Units", "n") + cell("grade", "", "Grade", "n") + "</tr>";
+  }
+  function bcFormHtml(list) {
+    var s = bcLoad(), p = phd(), adv = (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || "") && /kara/i.test(x.name || ""); })[0] || (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || ""); })[0];
+    var name = (state.data.me && state.data.me.name) || "";
+    var block = function (k, title, nameKey) {
+      var rows = list.filter(function (c) { return c.sec === k; }), flex = k === "major" ? list.filter(function (c) { return c.sec === "flexible"; }) : [];
+      var head = '<tr class="bc-sec"><th colspan="5" scope="colgroup">' + esc(title) + (nameKey ? " " + bcInfo(s, nameKey, "Field", { ph: "Field, for example City Planning" }).replace('class="bc-f"', 'class="bc-f bc-f--inline"') : "") + "</th></tr>";
+      return head + (rows.length ? rows.map(function (c) { return bcRow(c, s); }).join("") : '<tr><td colspan="5" class="bc-empty">No courses yet. Drag some into ' + esc(bcLabel(k)) + " above.</td></tr>") +
+        (flex.length ? '<tr class="bc-sub"><th colspan="5" scope="colgroup">Additional units (flexible)</th></tr>' + flex.map(function (c) { return bcRow(c, s); }).join("") : "");
+    };
+    var tot = list.filter(function (c) { return c.sec; }).reduce(function (n, c) { return n + units(c); }, 0);
+    return '<section class="bcard" aria-labelledby="bc-h"><div class="bcard__top"><p class="bcard__u">University of California, Berkeley</p><h2 id="bc-h">Tentative Program of Study for Doctoral Candidates</h2><p class="bcard__u">Department of Civil &amp; Environmental Engineering</p></div>' +
+      '<div class="bc-grid">' + bcInfo(s, "name", "Name", { dflt: name, wide: true }) + bcInfo(s, "sid", "SID #") + bcInfo(s, "address", "Address", { wide: true }) + bcInfo(s, "phone", "Phone") + bcInfo(s, "email", "Email") + "</div>" +
+      '<div class="bc-two"><div><ol class="bc-steps"><li>List all the courses you have completed and all the courses you plan to take.</li><li>Meet with your faculty advisor and get their signature.</li><li>Return the form to 750 Davis for the Graduate Advisor\'s signature.</li></ol></div>' +
+      '<div><p class="bc-k">Guidance Committee</p>' + bcInfo(s, "gc1", "Member 1", { dflt: adv ? adv.name : "" }) + bcInfo(s, "gc2", "Member 2") + bcInfo(s, "gc3", "Member 3") +
+      '<p class="bc-sign">Signature of Major Field Advisor' + (adv ? " (" + esc(adv.name) + ")" : "") + "</p></div></div>" +
+      '<div class="bc-grid">' + bcInfo(s, "bsFrom", "BS degree from") + bcInfo(s, "bsIn", "in") + bcInfo(s, "bsDate", "date") + bcInfo(s, "msFrom", "MS degree from") + bcInfo(s, "msIn", "in") + bcInfo(s, "msDate", "date") + "</div>" +
+      '<p class="bc-k">Program of graduate studies preparatory to the qualifying examination for a Doctor of Philosophy</p>' +
+      '<div class="bc-tw"><table class="bc-tbl"><thead><tr><th scope="col">Course number / title</th><th scope="col">School</th><th scope="col">Completed</th><th scope="col">Units</th><th scope="col">Grade</th></tr></thead><tbody>' +
+      block("major", "Major") + block("minor-a", "Minor", "minorA") + block("minor-b", "Minor", "minorB") +
+      '<tr class="bc-tot"><th scope="row" colspan="3">Total</th><td class="n">' + esc(String(tot)) + "</td><td></td></tr></tbody></table></div>" +
+      '<div class="bc-two bc-sigs"><p class="bc-sign">Tentative Program of Study approved: Graduate Advisor</p><p class="bc-sign">Date</p></div></section>';
+  }
+  function blueCardHtml() {
+    var list = bcCourses(), s = bcLoad();
+    var cols = BC_SECS.map(function (k) {
+      var here = list.filter(function (c) { return c.sec === k; }).sort(byOrder), f = byKey2(RULES.fields || [], k) || { min: 0 }, u = here.reduce(function (n, c) { return n + units(c); }, 0);
+      return '<section class="pcol" data-bc-sec="' + esc(k) + '" aria-labelledby="bs-' + k + '"><div class="pcol__head"><h3 id="bs-' + k + '">' + esc(bcLabel(k)) + "</h3>" +
+        '<p class="pcol__u"><b>' + fmtUnits(u) + "</b> of " + f.min + (u < f.min ? ' <span class="ureq__gap">' + fmtUnits(f.min - u) + " short</span>" : "") + "</p></div>" +
+        '<ul class="pcol__list">' + here.map(bcCard).join("") + '</ul><p class="pcol__drop" aria-hidden="true">Drop a course here</p></section>';
+    }).join("");
+    var pool = list.filter(function (c) { return !c.sec; }).sort(function (a, b) { return (a.custom ? -1 : 0) - (b.custom ? -1 : 0) || byOrder(a, b); });
+    var changed = Object.keys(s.place).length + s.custom.length, edited = Object.keys(s.edits).length;
+    var form = '<form class="padd" id="bc-add"><h3 class="rq__h">Add a course</h3>' +
+      '<div class="two"><div class="field"><label for="ba-code">Course</label><input id="ba-code" name="code" required placeholder="CYPLAN 204C"></div><div class="field"><label for="ba-units">Units</label><input id="ba-units" name="units" inputmode="decimal" value="3"></div></div>' +
+      '<div class="field"><label for="ba-title">Title</label><input id="ba-title" name="title"></div>' +
+      '<div class="two"><div class="field"><label for="ba-school">School</label><input id="ba-school" name="school" value="UC Berkeley"></div><div class="field"><label for="ba-term">Term</label><input id="ba-term" name="term" placeholder="Spring 2027"></div></div>' +
+      '<div class="field"><label for="ba-sec">Put it in</label><select id="ba-sec" name="sec">' + [["", "Not on the card"]].concat(BC_SECS.map(function (k) { return [k, bcLabel(k)]; })).map(function (o) { return '<option value="' + o[0] + '">' + esc(o[1]) + "</option>"; }).join("") + "</select></div>" +
+      '<button type="submit" class="btn btn--sm btn--solid">Add</button></form>';
+    return '<div class="ptools"><button type="button" class="btn btn--sm btn--solid" data-act="bc-save"' + (changed ? "" : " disabled") + ">Save these placements to my courses</button>" +
+      '<button type="button" class="btn btn--sm" data-act="bc-reset"' + (changed || edited ? "" : " disabled") + ">Start over from my courses</button>" +
+      '<button type="button" class="btn btn--sm" data-act="bc-print">Print or save as PDF</button>' +
+      '<p class="toolbar__note">' + (changed ? plural(changed, "change") + " not saved to your courses yet. " : "") + "Everything here is kept on this device.</p></div>" +
+      '<div class="planner"><div class="planner__main"><div class="pcols pcols--bc">' + cols + "</div>" +
+      '<section class="pcol pcol--pool" data-bc-sec="" aria-labelledby="bs-pool"><div class="pcol__head"><h3 id="bs-pool">Not on the card</h3><p class="pcol__u">DE-only courses, research units and ideas. Drag one up to put it on the card.</p></div><ul class="pcol__list pcol__list--pool">' +
+      pool.map(bcCard).join("") + "</ul></section></div>" +
+      '<aside class="planner__side" aria-labelledby="bck-h"><h2 id="bck-h">The card so far</h2>' + bcChecks(list) + form + "</aside></div>" +
+      '<h2 class="bc-title">The card</h2><p class="section__note">Filled in from the sections above. Type over anything on it; your edits stay until you start over. The form only has rows for the major and two minors, so flexible units are listed with the major. Grades and personal details are yours to type in.</p>' +
+      bcFormHtml(list);
+  }
+  function bcMove(id, sec) { var s = bcLoad(); s.place[id] = sec; bcSave(s); refresh(); }
+  function bcSaveAll() {
+    var s = bcLoad(), p = phd(), changes = [];
+    bcCourses().forEach(function (c) {
+      if (c.custom) return;
+      var real = byId(p.courses, c.id); if (!real) return;
+      if (c.sec && real.field !== c.sec) changes.push([real, { field: c.sec, status: real.status === "idea" ? "planned" : real.status }]);
+      if (!c.sec && BC_SECS.indexOf(real.field) > -1 && counted(real)) changes.push([real, { field: real.de ? "de" : "" }]);
+    });
+    openDialog('<form method="dialog">' + dlgHead("Save these placements?") + '<div class="dlg__body"><p>' + (changes.length ? plural(changes.length, "course") + " will change where it counts in your Sheet" : "No course changes") +
+      (s.custom.length ? ", and " + plural(s.custom.length, "added course") + " will be added" : "") + ". What you typed on the card stays on this device.</p></div>" +
+      '<div class="dlg__foot"><button type="button" class="btn" data-close>Keep editing</button><button type="submit" class="btn btn--solid">Save</button></div></form>', function () {
+      var jobs = changes.map(function (ch) { return Object.assign({}, ch[0], ch[1]); })
+        .concat(s.custom.map(function (c) { var r = Object.assign({}, c); var sec = s.place[c.id] !== undefined ? s.place[c.id] : c.sec; delete r.custom; delete r.sec; r.id = ""; r.field = sec || ""; r.status = sec ? "planned" : "idea"; r.school = r.school || "UC Berkeley"; return r; }));
+      return jobs.reduce(function (pr, row) {
+        return pr.then(function () { return apiPost({ action: "saveRecord", kind: "courses", row: row }, "Saving").then(function (r) {
+          var saved = r.row || Object.assign(row, { id: row.id || newId("pc") }), list = p.courses, i = list.findIndex(function (x) { return x.id === saved.id; });
+          if (i > -1) list[i] = saved; else list.push(saved);
+        }); });
+      }, Promise.resolve()).then(function () { s.place = {}; s.custom = []; bcSave(s); refresh(); toast("Saved to your courses" + (state.demo ? " (demo, not saved)" : "")); });
     });
   }
 
@@ -1925,6 +2060,7 @@
       store.set("f.show", document.getElementById("f-show").value);
       refresh(); var again = document.getElementById(t.id); if (again) again.focus();
     }
+    if (t.hasAttribute && t.hasAttribute("data-bc-move")) { var bid = t.getAttribute("data-bc-move"); bcMove(bid, t.value); var again3 = document.getElementById("bm-" + bid); if (again3) again3.focus(); return; }
     if (t.hasAttribute && t.hasAttribute("data-plan-move")) { var pid = t.getAttribute("data-plan-move"); planMove(pid, t.value); var again2 = document.getElementById("mv-" + pid); if (again2) again2.focus(); return; }
     if (t.id === "show-events") { store.set("showEvents", t.checked ? "1" : "0"); refresh(); var se = document.getElementById("show-events"); if (se) se.focus(); }
     if (t.id === "f-ncourse") { store.set("f.ncourse", t.value); refresh(); var n = document.getElementById("f-ncourse"); if (n) n.focus(); }
@@ -1963,6 +2099,10 @@
     if (act === "save-calendars") saveCalendars(b);
     if (act === "mark-all-read") markAllRead();
     if (act === "new-phd") { var k0 = b.getAttribute("data-kind"), pre = b.getAttribute("data-program") ? { program: b.getAttribute("data-program"), kind: "session", status: "upcoming" } : null; openDialog(phdForm(k0, null, pre), function (v) { return savePhd(k0, null, v); }); }
+    if (act === "bc-save") bcSaveAll();
+    if (act === "bc-reset") { store.del("bluecard"); refresh(); toast("Back to your saved courses"); }
+    if (act === "bc-drop") { var sb = bcLoad(); sb.custom = sb.custom.filter(function (x) { return x.id !== id; }); delete sb.place[id]; bcSave(sb); refresh(); }
+    if (act === "bc-print") { document.documentElement.classList.add("printing-bc"); window.print(); setTimeout(function () { document.documentElement.classList.remove("printing-bc"); }, 500); }
     if (act === "plan-save") planSaveAll();
     if (act === "plan-reset") { simSave({ place: {}, custom: [] }); refresh(); toast("Back to your saved courses"); }
     if (act === "plan-drop") { var s0 = simLoad(); s0.custom = s0.custom.filter(function (x) { return x.id !== id; }); delete s0.place[id]; simSave(s0); refresh(); }
@@ -1992,6 +2132,15 @@
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "all-filter" || ev.target.id === "news-filter") { ev.preventDefault(); return; }
     if (ev.target.id === "token-form") { ev.preventDefault(); saveToken(ev.target); return; }
+    if (ev.target.id === "bc-add") {
+      ev.preventDefault();
+      var fb = new FormData(ev.target), cb = { id: "bc-" + Math.random().toString(36).slice(2, 8) }, secb = "";
+      fb.forEach(function (v, k) { if (k === "sec") secb = String(v); else cb[k] = String(v).trim(); });
+      if (!cb.code) return;
+      if (cb.units && !/^\d{1,2}(\.\d)?$/.test(cb.units)) { toast("Units should be a number, like 3"); return; }
+      var sbc = bcLoad(); sbc.custom.push(cb); sbc.place[cb.id] = secb; bcSave(sbc); refresh(); toast("Added " + cb.code + " to " + bcLabel(secb));
+      return;
+    }
     if (ev.target.id === "plan-add") {
       ev.preventDefault();
       var fd = new FormData(ev.target), c = { id: "sim-" + Math.random().toString(36).slice(2, 8) };
@@ -2009,18 +2158,29 @@
   });
   /* Planner drag and drop. Every card also has a Move to menu, so the keyboard and screen readers don't need dragging. */
   document.addEventListener("dragstart", function (ev) {
-    var c = ev.target.closest && ev.target.closest("[data-plan-id]"); if (!c) return;
-    ev.dataTransfer.setData("text/plain", c.getAttribute("data-plan-id")); ev.dataTransfer.effectAllowed = "move"; c.classList.add("is-dragging");
+    var c = ev.target.closest && ev.target.closest("[data-plan-id],[data-bc-id]"); if (!c) return;
+    ev.dataTransfer.setData("text/plain", c.getAttribute("data-plan-id") || c.getAttribute("data-bc-id")); ev.dataTransfer.effectAllowed = "move"; c.classList.add("is-dragging");
   });
-  document.addEventListener("dragend", function (ev) { var c = ev.target.closest && ev.target.closest("[data-plan-id]"); if (c) c.classList.remove("is-dragging"); document.querySelectorAll(".pcol.is-over").forEach(function (x) { x.classList.remove("is-over"); }); });
+  document.addEventListener("dragend", function (ev) { var c = ev.target.closest && ev.target.closest("[data-plan-id],[data-bc-id]"); if (c) c.classList.remove("is-dragging"); document.querySelectorAll(".pcol.is-over").forEach(function (x) { x.classList.remove("is-over"); }); });
   document.addEventListener("dragover", function (ev) {
-    var col = ev.target.closest && ev.target.closest("[data-plan-term]"); if (!col) return;
+    var col = ev.target.closest && ev.target.closest("[data-plan-term],[data-bc-sec]"); if (!col) return;
     ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
     document.querySelectorAll(".pcol.is-over").forEach(function (x) { if (x !== col) x.classList.remove("is-over"); }); col.classList.add("is-over");
   });
   document.addEventListener("drop", function (ev) {
-    var col = ev.target.closest && ev.target.closest("[data-plan-term]"); if (!col) return;
-    ev.preventDefault(); var id = ev.dataTransfer.getData("text/plain"); if (id) planMove(id, col.getAttribute("data-plan-term"));
+    var col = ev.target.closest && ev.target.closest("[data-plan-term],[data-bc-sec]"); if (!col) return;
+    ev.preventDefault(); var id = ev.dataTransfer.getData("text/plain"); if (!id) return;
+    if (col.hasAttribute("data-bc-sec")) bcMove(id, col.getAttribute("data-bc-sec")); else planMove(id, col.getAttribute("data-plan-term"));
+  });
+  /* Typing on the Blue Card saves as you go, without redrawing the page (so the cursor stays put). */
+  document.addEventListener("input", function (ev) {
+    var t = ev.target; if (!t.getAttribute) return;
+    var k = t.getAttribute("data-bc-info"), e = t.getAttribute("data-bc-edit");
+    if (!k && !e) return;
+    var s = bcLoad();
+    if (k) s.info[k] = t.value;
+    else { s.edits[e] = s.edits[e] || {}; s.edits[e][t.getAttribute("data-col")] = t.value; }
+    bcSave(s);
   });
   window.addEventListener("hashchange", route);
 
@@ -2190,7 +2350,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007061233";
+  var BUILD = "20261007062420";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
