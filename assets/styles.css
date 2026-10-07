@@ -977,3 +977,4 @@ dialog.dlg--wide { width: min(1000px, calc(100vw - 32px)); }
 
 /* Wide screens: a little more room at the edges, the same for every band so the left edges line up. */
 @media (min-width: 1400px) { .wrap, .band__inner, .notice p, .foot p, .loading { padding-left: 48px; padding-right: 48px; } }
+.pcrd__off { font-size: var(--f1); color: var(--ink-2); }

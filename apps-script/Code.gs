@@ -29,7 +29,7 @@ var TABS = {
     'firstSeenAt', 'canvasUpdatedAt', 'removed', 'link', 'project', 'series'],
   Announcements: ['id', 'courseId', 'title', 'postedAt', 'author', 'url', 'message', 'read'],
   Log: ['timestamp', 'action', 'detail'],
-  'PhD coursework': ['id', 'code', 'title', 'school', 'term', 'units', 'status', 'field', 'core', 'de', 'approval', 'notes', 'order', 'schedule'],
+  'PhD coursework': ['id', 'code', 'title', 'school', 'term', 'units', 'status', 'field', 'core', 'de', 'approval', 'notes', 'order', 'schedule', 'offered'],
   'PhD milestones': ['id', 'date', 'term', 'title', 'category', 'status', 'notes', 'link', 'order'],
   'PhD questions': ['id', 'question', 'who', 'status', 'answer', 'asked', 'link'],
   'PhD contacts': ['id', 'name', 'role', 'email', 'group'],

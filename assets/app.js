@@ -1107,7 +1107,7 @@
         list.map(function (c) {
           var counts2 = [fieldName[c.field] !== undefined ? fieldName[c.field] : c.field, c.field === "de" && !c.de ? "DE only" : "", c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", deName(c.de)].filter(Boolean).join("; ");
           return '<tr><td class="t"><span tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</span>" + (c.title ? '<small class="ctbl__title">' + esc(c.title) + "</small>" : "") + "</td>" +
-            "<td>" + esc([c.school, c.term].filter(Boolean).join(", ") || "Not set") + (c.units ? "<small>" + esc(fmtUnits(units(c))) + "</small>" : "") + "</td>" +
+            "<td>" + esc([c.school, c.term].filter(Boolean).join(", ") || "Not set") + (c.units ? "<small>" + esc(fmtUnits(units(c))) + "</small>" : "") + (offered(c) && c.status !== "done" ? "<small>Offered: " + esc(offered(c).word) + "</small>" : "") + "</td>" +
             "<td>" + esc(counts2) + (c.approval ? '<small>Approved: ' + esc(c.approval) + "</small>" : "") + "</td>" +
             '<td class="act"><button type="button" class="btn btn--quiet btn--sm" data-act="edit-phd" data-kind="courses" data-id="' + esc(c.id) + '">Edit<span class="sr"> ' + esc(c.code) + "</span></button></td></tr>";
         }).join("") + "</tbody></table>";
@@ -1298,6 +1298,34 @@
     if (c.status === "in-progress" || c.status === "planned") return terms.indexOf(c.term) > -1 ? c.term : "?";
     return "";
   }
+  /* When a course usually runs, from the terms it ran (the "offered" column, like "Sp24 Sp25 Fa26"; notes in brackets are ignored). */
+  var SEASON = { Sp: "Spring", Fa: "Fall", Su: "Summer" };
+  function offered(c) {
+    var raw = String(c.offered || "").trim(); if (!raw) return null;
+    if (/every semester/i.test(raw)) return { word: "Every semester", raw: raw, ok: function () { return true; } };
+    var seen = [], re = /\b(Sp|Fa|Su)(\d\d)\b/g, m, head = raw.split("(")[0];
+    while ((m = re.exec(head))) seen.push({ s: SEASON[m[1]], y: 2000 + Number(m[2]) });
+    if (!seen.length) return { word: /^none/i.test(raw) ? "Not offered lately" : raw.split(/[;(]/)[0].trim(), raw: raw, none: /^none/i.test(raw), ok: function () { return !/^none/i.test(raw); } };
+    var seasons = seen.map(function (x) { return x.s; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+    var word, alt = null;
+    if (seen.length === 1) word = "Only " + seen[0].s + " " + seen[0].y + " so far";
+    else if (seasons.length > 1) word = seasons.length === 2 && seasons.indexOf("Summer") < 0 ? "Fall and spring" : seasons.join(", ");
+    else {
+      var ys = seen.map(function (x) { return x.y; }).sort();
+      var gaps = ys.slice(1).map(function (y, i) { return y - ys[i]; });
+      if (gaps.length && gaps.every(function (g) { return g === 2; })) { alt = ys[0] % 2; word = "Every other " + seasons[0].toLowerCase() + " (" + (alt ? "odd" : "even") + " years)"; }
+      else word = seasons[0] + " only";
+    }
+    return { word: word, raw: raw, seen: seen, ok: function (term) {
+      var t = /^(Spring|Summer|Fall)\s+(\d{4})$/.exec(String(term || "")); if (!t) return true;
+      if (seasons.indexOf(t[1]) < 0) return false;
+      return alt === null || seasons.length > 1 ? true : Number(t[2]) % 2 === alt;
+    } };
+  }
+  function offWarn(c, term) {
+    var o = offered(c); if (!o || !term || o.ok(term)) return "";
+    return o.none ? "Not offered since at least Fall 2023" : /^Every other/.test(o.word) ? "Runs " + o.word.toLowerCase() + ", so " + term + " is unlikely" : "Not usually offered in " + term.split(" ")[0].toLowerCase();
+  }
   function cActive() { return phd().courses.filter(function (c) { return c.status !== "dropped"; }); }
   /* "TuTh 9:30 AM-10:59 AM" into days and minutes; anything without a time (Online) never clashes. */
   function parseSched(s) {
@@ -1328,14 +1356,17 @@
     var lock = locked(c), mods = (RULES.de || {}).modules || {}, where = cWhere(c, terms), drag = !(view === "term" && lock);
     var tags = [c.status === "idea" ? "Idea" : "", c.core ? (byKey(RULES.core, c.core) || c.core) + " core" : "", c.de === "core" ? "DE core" : c.de === "petition" ? "DE elective (petition)" : mods[c.de] ? "DE elective" : "",
       c.school && c.school !== "UC Berkeley" ? c.school : ""].filter(Boolean);
-    var whenOpts = [["", "Not planned"]].concat(where === "?" ? [["?", c.term ? "Planned, " + c.term : "Planned, no term"]] : []).concat(terms.map(function (t) { return [t, t]; }));
+    var off = offered(c), warn = c.status === "planned" || c.status === "idea" && c.term ? offWarn(c, c.status === "planned" ? c.term : "") : "";
+    var whenOpts = [["", "Not planned"]].concat(where === "?" ? [["?", c.term ? "Planned, " + c.term : "Planned, no term"]] : []).concat(terms.map(function (t) { return [t, t + (off && !off.ok(t) ? " (not usually offered)" : "")]; }));
     var grade = c.status === "done" ? (bcLoad().edits[c.id] || {}).grade || "" : "";
     return '<li class="pcrd' + (lock && view === "term" ? " is-locked" : "") + (clash ? " has-clash" : "") + (c.status === "idea" ? " is-idea" : "") + '"' + (drag ? ' draggable="true" data-c-id="' + esc(c.id) + '"' : "") + ">" +
       '<p class="pcrd__t"><b tabindex="0" data-peek="p:' + esc(c.id) + '">' + esc(c.code) + "</b>" + (c.units ? ' <span class="pcrd__u">' + esc(fmtUnits(units(c))) + "</span>" : "") + "</p>" +
       (c.title ? '<p class="pcrd__n">' + esc(c.title) + "</p>" : "") +
       (c.schedule && !lock ? '<p class="pcrd__s">' + esc(c.schedule) + "</p>" : "") +
       (tags.length ? '<p class="pcrd__tags">' + tags.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") + "</p>" : "") +
+      (off && !lock ? '<p class="pcrd__off" title="' + esc("Terms it ran: " + off.raw) + '">Offered: ' + esc(off.word) + "</p>" : "") +
       (clash ? '<p class="pcrd__clash"><span class="st">' + shape("late") + "Clashes with " + esc(clash.join(", ")) + "</span></p>" : "") +
+      (warn ? '<p class="pcrd__clash"><span class="st">' + shape("late") + esc(warn) + "</span></p>" : "") +
       (c.status === "done" ? '<p class="pcrd__g"><label for="bg-' + esc(c.id) + '">Grade, for the forms</label> <input id="bg-' + esc(c.id) + '" data-bc-grade="' + esc(c.id) + '" value="' + esc(grade) + '" size="3"></p>' : "") +
       '<div class="pcrd__sels">' +
       (lock ? '<p class="pcrd__lock">' + esc(C_STATUS[c.status]) + (c.term ? ", " + esc(c.term) : "") + "</p>"
@@ -1460,6 +1491,8 @@
     var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
       check(md.ok, "Electives from " + needM + " modules", md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1) + " " + m.course.code + (m.state === "pet" ? " (petition)" : ""); }).join(", ")) : "") +
       check(home.length <= (de.maxHome || 1) ? true : "warn", "At most " + (de.maxHome || 1) + " CEE elective", home.length > (de.maxHome || 1) ? esc(home.map(function (c) { return c.code; }).join(", ")) : "");
+    var offBad = p.courses.filter(function (c) { return c.status === "planned" && offWarn(c, c.term); });
+    var offCheck = check(offBad.length ? "warn" : true, "Planned when each course runs", offBad.length ? offBad.map(function (c) { return esc(c.code + ": " + offWarn(c, c.term)); }).join(". ") + "." : "Based on the terms each course ran, Fall 2023 to Spring 2027.");
     var rws = bcRowsFor(formCourses()), fit = "";
     Object.keys(PDF_FORMS).forEach(function (k) {
       var F = PDF_FORMS[k], over = [];
@@ -1472,6 +1505,7 @@
       '<ul class="rqs rqs--tight">' + fieldChecks + '</ul><h3 class="rq__h">Core areas</h3><ul class="rqs rqs--tight">' + coreChecks + "</ul>" +
       '<h3 class="rq__h">Minors</h3><ul class="rqs rqs--tight">' + minorChecks + "</ul>" +
       '<h3 class="rq__h">' + esc(de.label || "Designated Emphasis") + "</h3>" + deBar(st, false, md) + '<ul class="rqs rqs--tight">' + deChecks + "</ul>" +
+      '<h3 class="rq__h">Semesters</h3><ul class="rqs rqs--tight">' + offCheck + "</ul>" +
       '<h3 class="rq__h">The forms</h3><ul class="rqs rqs--tight">' + fit + '</ul><p class="section__note"><button type="button" class="linkbtn" data-act="c-preview">Preview a form</button> or <a href="#/phd/forms">open the Forms page</a>.</p>';
   }
   function cAddForm(terms) {
@@ -1679,6 +1713,7 @@
       ["field", "Counts toward", "select", { opts: function () { return [["", "Not placed yet"]].concat((RULES.fields || []).map(function (f) { return [f.key, f.label]; })).concat([["de", "Only the Designated Emphasis"], ["none", "Doesn't count toward the 30"]]); } }],
       ["core", "Core area", "select", { half: 1, opts: function () { return [["", "None"]].concat((RULES.core || []).map(function (f) { return [f.key, f.label]; })); } }],
       ["de", "Designated Emphasis", "select", { half: 2, opts: function () { var m = (RULES.de || {}).modules || {}; return [["", "Doesn't count"], ["core", "Core course"]].concat(Object.keys(m).map(function (k) { return [k, "Elective, " + m[k]]; })).concat([["petition", "Elective by petition"]]); } }],
+      ["schedule", "Schedule", "text", { half: 1, hint: "Days, then times, like TuTh 9:30 AM-10:59 AM." }], ["offered", "Terms it has run", "text", { half: 2, hint: "Like Sp25 Sp26 Fa26. Used to warn you when a plan puts it in the wrong semester." }],
       ["approval", "Approved by", "text", { hint: "Who said it counts, and when." }], ["notes", "Notes", "textarea"]] },
     milestones: { title: ["Add a milestone", "Edit milestone"], what: "milestone", fields: [
       ["title", "What", "text", { required: true }],
@@ -2466,7 +2501,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007090643";
+  var BUILD = "20261007094200";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

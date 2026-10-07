@@ -562,7 +562,8 @@
     "approval": "Advisor, by email",
     "notes": "Sample course from a master's degree.",
     "order": "1",
-    "schedule": ""
+    "schedule": "",
+    "offered": ""
    },
    {
     "id": "pc-2",
@@ -578,7 +579,8 @@
     "approval": "Advisor, by email",
     "notes": "",
     "order": "2",
-    "schedule": ""
+    "schedule": "",
+    "offered": ""
    },
    {
     "id": "pc-3",
@@ -594,7 +596,8 @@
     "approval": "",
     "notes": "",
     "order": "3",
-    "schedule": ""
+    "schedule": "",
+    "offered": ""
    },
    {
     "id": "pc-4",
@@ -610,7 +613,8 @@
     "approval": "",
     "notes": "DE core course. Before the qualifying exam.",
     "order": "4",
-    "schedule": "Fr 9:00 AM-11:59 AM"
+    "schedule": "Fr 9:00 AM-11:59 AM",
+    "offered": "Fa24 Fa25 Fa26"
    },
    {
     "id": "pc-5",
@@ -626,7 +630,8 @@
     "approval": "",
     "notes": "",
     "order": "5",
-    "schedule": "Mo 9:00 AM-11:59 AM"
+    "schedule": "Mo 9:00 AM-11:59 AM",
+    "offered": ""
    },
    {
     "id": "pc-6",
@@ -642,7 +647,8 @@
     "approval": "",
     "notes": "",
     "order": "6",
-    "schedule": "Mo 2:30 PM-5:29 PM"
+    "schedule": "Mo 2:30 PM-5:29 PM",
+    "offered": ""
    },
    {
     "id": "pc-7",
@@ -658,7 +664,8 @@
     "approval": "",
     "notes": "",
     "order": "7",
-    "schedule": "TuTh 9:30 AM-10:59 AM"
+    "schedule": "TuTh 9:30 AM-10:59 AM",
+    "offered": "Sp24 Sp25 Sp26 Sp27"
    },
    {
     "id": "pc-8",
@@ -674,7 +681,8 @@
     "approval": "",
     "notes": "",
     "order": "8",
-    "schedule": "Fr 2:00 PM-4:59 PM"
+    "schedule": "Fr 2:00 PM-4:59 PM",
+    "offered": "Sp25 Sp26 Sp27"
    },
    {
     "id": "pc-9",
@@ -690,7 +698,8 @@
     "approval": "",
     "notes": "",
     "order": "9",
-    "schedule": "Mo 10:00 AM-11:59 AM"
+    "schedule": "Mo 10:00 AM-11:59 AM",
+    "offered": "Sp24 Sp26 (sample)"
    },
    {
     "id": "pc-10",
@@ -706,7 +715,8 @@
     "approval": "",
     "notes": "Spring: MoWe 9:30 to 10:59 AM.",
     "order": "10",
-    "schedule": ""
+    "schedule": "",
+    "offered": ""
    },
    {
     "id": "pc-11",
@@ -722,7 +732,8 @@
     "approval": "",
     "notes": "",
     "order": "11",
-    "schedule": "TuTh 12:30 PM-1:59 PM"
+    "schedule": "TuTh 12:30 PM-1:59 PM",
+    "offered": "Fa24 Sp25 Fa25 Sp26"
    },
    {
     "id": "pc-12",
@@ -738,7 +749,8 @@
     "approval": "",
     "notes": "",
     "order": "12",
-    "schedule": "MoWe 12:30 PM-1:59 PM"
+    "schedule": "MoWe 12:30 PM-1:59 PM",
+    "offered": "Sp24 Sp25 Sp26"
    },
    {
     "id": "pc-13",
@@ -754,7 +766,8 @@
     "approval": "",
     "notes": "Spring: TuTh 9:00 to 10:59 AM.",
     "order": "13",
-    "schedule": "TuTh 9:00 AM-10:59 AM"
+    "schedule": "TuTh 9:00 AM-10:59 AM",
+    "offered": ""
    },
    {
     "id": "pc-14",
@@ -770,7 +783,8 @@
     "approval": "",
     "notes": "Thursdays 2:00 to 4:59 PM.",
     "order": "14",
-    "schedule": "Th 2:00 PM-4:59 PM"
+    "schedule": "Th 2:00 PM-4:59 PM",
+    "offered": ""
    }
   ],
   "milestones": [
