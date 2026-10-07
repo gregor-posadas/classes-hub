@@ -1468,11 +1468,14 @@
     out += check(outside ? true : false, "At least one minor fully outside CEE", outside ? "" : "Neither minor is outside CEE yet.") +
       check(envIn.length ? "warn" : true, "No environmental engineering courses in a minor", envIn.length ? "Move " + esc(envIn.map(function (c) { return c.code; }).join(", ")) + "." : "") +
       (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". CEE has no limit on courses counting toward both (Sara, Sep 4); ask Yael whether the DE has one.") : "");
-    var rws = bcRowsFor(list), over = [];
-    if (rws.major.length > BC_ROWS.major) over.push("the major and flexible courses (" + rws.major.length + " of " + BC_ROWS.major + " rows)");
-    if (rws.minorA.length > BC_ROWS.minor) over.push("Minor 1 (" + rws.minorA.length + " of " + BC_ROWS.minor + " rows)");
-    if (rws.minorB.length > BC_ROWS.minor) over.push("Minor 2 (" + rws.minorB.length + " of " + BC_ROWS.minor + " rows)");
-    if (over.length) out += check("warn", "Fits on the form", "Too many courses for " + esc(over.join(" and ")) + ". Extra ones are left off the PDF.");
+    var rws = bcRowsFor(list);
+    Object.keys(PDF_FORMS).forEach(function (k) {
+      var F = PDF_FORMS[k], over = [];
+      if (rws.major.length > F.major) over.push("the major and flexible courses (" + rws.major.length + " for " + F.major + " rows)");
+      if (rws.minorA.length > F.minor) over.push("Minor 1 (" + rws.minorA.length + " for " + F.minor + " rows)");
+      if (rws.minorB.length > F.minor) over.push("Minor 2 (" + rws.minorB.length + " for " + F.minor + " rows)");
+      if (over.length) out += check("warn", "Fits on the " + F.short, "Too many courses for " + esc(over.join(" and ")) + ". Extra ones are left off that PDF.");
+    });
     return '<h3 class="rq__h">' + fmtUnits(total) + " of " + need + " on the card</h3>" + unitBar({ done: 0, doing: 0, planned: total, sum: total }, need, "Units on the card") + '<ul class="rqs rqs--tight">' + out + "</ul>";
   }
   function bcInfo(s, key, label, opts) {
@@ -1481,25 +1484,32 @@
     return '<label class="bc-f' + (opts.wide ? " bc-f--wide" : "") + '"><span>' + esc(label) + '</span><input data-bc-info="' + esc(key) + '" value="' + esc(v) + '"' + (opts.ph ? ' placeholder="' + esc(opts.ph) + '"' : "") + "></label>";
   }
   /* The official form: the backend fetches the blank Blue Card, pdf-lib fills its fields from the sections above. */
-  var bcPdf = null, bcUrl = "", bcTimer = 0, BC_ROWS = { major: 15, minor: 4 };
+  /* Both department forms: how many rows each has, and what its fields are called. */
+  var PDF_FORMS = {
+    bluecard: { short: "Blue Card", title: "Blue Card (Tentative Program of Study)", major: 15, minor: 4 },
+    pos: { short: "Program of Study", title: "Program of Study for Doctoral Candidates", major: 12, minor: 6 }
+  };
+  var bcPdf = {}, bcUrl = "", bcTimer = 0;
+  function bcWhich() { var k = store.get("bc.form"); return PDF_FORMS[k] ? k : "bluecard"; }
   function b64Bytes(b) { var bin = atob(b), out = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
   function loadScript(src) { return new Promise(function (ok, no) { var el = document.createElement("script"); el.src = src; el.onload = ok; el.onerror = function () { no(new Error("Couldn't load the PDF tool.")); }; document.head.appendChild(el); }); }
   function bcLib() { return window.PDFLib ? Promise.resolve(window.PDFLib) : loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js").then(function () { return window.PDFLib; }); }
-  function bcBlank() {
-    if (bcPdf) return Promise.resolve(bcPdf);
-    var kept = store.get("bluecard.pdf"); if (kept) { bcPdf = b64Bytes(kept); return Promise.resolve(bcPdf); }
+  function bcBlank(k) {
+    if (bcPdf[k]) return Promise.resolve(bcPdf[k]);
+    var kept = store.get(k + ".pdf"); if (kept) { bcPdf[k] = b64Bytes(kept); return Promise.resolve(bcPdf[k]); }
     if (state.demo) return Promise.reject(new Error("The demo can't load the official form. Your own hub can."));
-    var url = cfg.apiUrl + (cfg.apiUrl.indexOf("?") > -1 ? "&" : "?") + "action=form&name=bluecard&code=" + encodeURIComponent(store.get("code") || "");
+    var url = cfg.apiUrl + (cfg.apiUrl.indexOf("?") > -1 ? "&" : "?") + "action=form&name=" + k + "&code=" + encodeURIComponent(store.get("code") || "");
     return fetch(url, { redirect: "follow" }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) throw new Error(j.error || "The backend couldn't get the form.");
-      store.set("bluecard.pdf", j.b64); bcPdf = b64Bytes(j.b64); return bcPdf;
+      store.set(k + ".pdf", j.b64); bcPdf[k] = b64Bytes(j.b64); return bcPdf[k];
     });
   }
   function bcRowsFor(list) {
     var by = function (k) { return list.filter(function (c) { return c.sec === k; }).sort(byOrder); };
     return { major: by("major").concat(by("flexible")), minorA: by("minor-a"), minorB: by("minor-b") };
   }
-  function bcFill(L, bytes) {
+  function bcFill(L, bytes, k) {
+    var F = PDF_FORMS[k], pos = k === "pos";
     var s = bcLoad(), list = bcCourses(), rows = bcRowsFor(list), p = phd();
     var adv = (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || "") && /kara/i.test(x.name || ""); })[0] || (p.contacts || []).filter(function (x) { return /advis/i.test(x.role || ""); })[0];
     var info = function (k, d) { return s.info[k] !== undefined ? s.info[k] : (d || ""); };
@@ -1512,23 +1522,32 @@
           var size = v ? Math.min(max || 10, w / Math.max(1, font.widthOfTextAtSize(v, 1))) : (max || 10);
           f.setFontSize(Math.max(4.5, Math.floor(size * 10) / 10)); f.setText(v);
         };
-        put("Name", info("name", (state.data.me && state.data.me.name) || "")); put("SID", info("sid")); put("Address", info("address")); put("Phone", info("phone")); put("email", info("email"));
-        put("Guidance Committee list names 1", info("gc1", adv ? adv.name : "")); put("Guidance Committee list names 2", info("gc2")); put("Guidance Committee list names 3", info("gc3"));
-        put("BS degree from", info("bsFrom")); put("in", info("bsIn")); put("date", info("bsDate")); put("MS degree from", info("msFrom")); put("in_2", info("msIn")); put("date_2", info("msDate"));
+        put("Name", info("name", (state.data.me && state.data.me.name) || "")); put("SID", info("sid")); put("Address", info("address")); put("Phone", info("phone")); put(pos ? "Email" : "email", info("email"));
+        if (pos) {
+          put("BS from", info("bsFrom")); put("In_1", info("bsIn")); put("Date", info("bsDate")); put("MS from", info("msFrom")); put("in", info("msIn")); put("Date_2", info("msDate"));
+          put("undefined_2", info("minorA")); put("Minor Field", info("minorB"));
+          ["1", "2", "3", "4", "5"].forEach(function (n) { put(n, info("qe" + n)); });
+          ["undefined_3", "undefined_4", "1_2", "2_2", "undefined_5"].forEach(function (nm, i) { put(nm, info("qeDept" + (i + 1))); });
+        } else {
+          put("Guidance Committee list names 1", info("gc1", adv ? adv.name : "")); put("Guidance Committee list names 2", info("gc2")); put("Guidance Committee list names 3", info("gc3"));
+          put("BS degree from", info("bsFrom")); put("in", info("bsIn")); put("date", info("bsDate")); put("MS degree from", info("msFrom")); put("in_2", info("msIn")); put("date_2", info("msDate"));
+        }
         var row = function (block, n, c) {
           var sfx = n === 1 ? "" : "_" + n, e = s.edits[c.id] || {};
+          if (pos) block = block === "Major" ? "Major Field" : "Minor Field X Faculty Signature";
           // Long titles lose words from the end so the text stays at a readable size (6 pt or more).
-          var nm = "Course NumberTitle" + block + sfx, words = String(c.title || "").split(/\s+/).filter(Boolean), txt = c.code + (words.length ? " " + words.join(" ") : ""), fw = 0;
+          var nm = (pos ? "UCB Course   Title" : "Course NumberTitle") + block + sfx, words = String(c.title || "").split(/\s+/).filter(Boolean), txt = c.code + (words.length ? " " + words.join(" ") : ""), fw = 0;
           try { fw = form.getTextField(nm).acroField.getWidgets()[0].getRectangle().width - 4; } catch (e2) { fw = 0; }
           while (fw && words.length && font.widthOfTextAtSize(txt, 6) > fw) { words.pop(); txt = c.code + (words.length ? " " + words.join(" ") + "…" : ""); }
           put(nm, txt, 8);
-          put("School" + block + sfx, c.school || "UC Berkeley", 8);
-          put("Completed" + block + sfx, c.status === "done" ? (c.term || "Yes") : c.status === "in-progress" ? "In progress" : "Planned", 8);
+          put("School" + block + sfx, pos && (!c.school || c.school === "UC Berkeley") ? "UCB" : c.school || "UC Berkeley", 8);
+          if (pos) put("Semester" + block + sfx, c.term || (c.status === "done" ? "" : "Planned"), 8);
+          else put("Completed" + block + sfx, c.status === "done" ? (c.term || "Yes") : c.status === "in-progress" ? "In progress" : "Planned", 8);
           put("Units" + block + sfx, c.units || "", 8); put("Grade" + block + sfx, e.grade || "", 8);
         };
-        rows.major.slice(0, BC_ROWS.major).forEach(function (c, i) { row("Major", i + 1, c); });
-        rows.minorA.slice(0, BC_ROWS.minor).forEach(function (c, i) { row("Minor", i + 1, c); });
-        rows.minorB.slice(0, BC_ROWS.minor).forEach(function (c, i) { row("Minor", i + 1 + BC_ROWS.minor, c); });
+        rows.major.slice(0, F.major).forEach(function (c, i) { row("Major", i + 1, c); });
+        rows.minorA.slice(0, F.minor).forEach(function (c, i) { row("Minor", i + 1, c); });
+        rows.minorB.slice(0, F.minor).forEach(function (c, i) { row("Minor", i + 1 + F.minor, c); });
         form.updateFieldAppearances(font);
         return doc.save();
       });
@@ -1536,12 +1555,15 @@
   }
   function bcPreview() {
     var frame = document.getElementById("bc-frame"), note = document.getElementById("bc-pdf-note"); if (!frame) return;
-    note.textContent = "Filling in the form…";
-    Promise.all([bcLib(), bcBlank()]).then(function (r) { return bcFill(r[0], r[1]); }).then(function (bytes) {
+    var k = bcWhich();
+    note.textContent = "Filling in the " + PDF_FORMS[k].short + "…";
+    Promise.all([bcLib(), bcBlank(k)]).then(function (r) { return bcFill(r[0], r[1], k); }).then(function (bytes) {
+      if (bcWhich() !== k) return;
       if (bcUrl) URL.revokeObjectURL(bcUrl);
       bcUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       frame.src = bcUrl + "#view=FitH"; frame.hidden = false;
-      document.querySelectorAll("[data-bc-pdf]").forEach(function (a) { a.href = bcUrl; a.removeAttribute("aria-disabled"); });
+      frame.title = "The filled-in " + PDF_FORMS[k].title;
+      document.querySelectorAll("[data-bc-pdf]").forEach(function (a) { a.href = bcUrl; a.removeAttribute("aria-disabled"); if (a.hasAttribute("download")) a.setAttribute("download", PDF_FORMS[k].title + ".pdf"); });
       note.textContent = "Updated " + fmtTime(new Date()) + ". The fields stay editable in the downloaded file.";
     }).catch(function (e) { note.textContent = "Couldn't fill in the form: " + e.message; });
   }
@@ -1552,7 +1574,10 @@
       '<div class="bc-grid">' + bcInfo(s, "name", "Name", { dflt: (state.data.me && state.data.me.name) || "" }) + bcInfo(s, "sid", "SID") + bcInfo(s, "email", "Email") +
       bcInfo(s, "address", "Address", { wide: true }) + bcInfo(s, "phone", "Phone") +
       bcInfo(s, "gc1", "Guidance committee 1", { dflt: adv ? adv.name : "" }) + bcInfo(s, "gc2", "Guidance committee 2") + bcInfo(s, "gc3", "Guidance committee 3") +
-      bcInfo(s, "bsFrom", "BS degree from") + bcInfo(s, "bsIn", "BS in") + bcInfo(s, "bsDate", "BS date") + bcInfo(s, "msFrom", "MS degree from") + bcInfo(s, "msIn", "MS in") + bcInfo(s, "msDate", "MS date") + "</div></details>";
+      bcInfo(s, "bsFrom", "BS degree from") + bcInfo(s, "bsIn", "BS in") + bcInfo(s, "bsDate", "BS date") + bcInfo(s, "msFrom", "MS degree from") + bcInfo(s, "msIn", "MS in") + bcInfo(s, "msDate", "MS date") + "</div>" +
+      '<h3 class="rq__h">For the Program of Study</h3><div class="bc-grid">' + bcInfo(s, "minorA", "Minor 1 field", { ph: "For example City Planning" }) + bcInfo(s, "minorB", "Minor 2 field", { ph: "For example Development Engineering" }) + "</div>" +
+      '<p class="section__note">Suggested qualifying exam committee: the chair can\'t be your research advisor, and member 5 is the outside member (Academic Senate).</p><div class="bc-grid bc-grid--qe">' +
+      [1, 2, 3, 4, 5].map(function (n) { return bcInfo(s, "qe" + n, n === 1 ? "1. Chair" : n === 5 ? "5. Outside member" : n + ". Member") + bcInfo(s, "qeDept" + n, "Department"); }).join("") + "</div></details>";
   }
   function blueCardHtml() {
     var list = bcCourses(), s = bcLoad();
@@ -1578,9 +1603,10 @@
       '<section class="pcol pcol--pool" data-bc-sec="" aria-labelledby="bs-pool"><div class="pcol__head"><h3 id="bs-pool">Not on the card</h3><p class="pcol__u">DE-only courses, research units and ideas. Drag one up to put it on the card.</p></div><ul class="pcol__list pcol__list--pool">' +
       pool.map(bcCard).join("") + "</ul></section></div>" +
       '<aside class="planner__side" aria-labelledby="bck-h"><h2 id="bck-h">The card so far</h2>' + bcChecks(list) + form + "</aside></div>" +
-      '<section class="bc-off" aria-labelledby="bco-h"><div class="h-row"><h2 id="bco-h">The official form, filled in</h2><div class="toolbar toolbar--tight"><a class="btn btn--sm btn--solid" data-bc-pdf aria-disabled="true" download="Blue Card (Tentative Program of Study).pdf" href="#">Download the filled form</a><a class="btn btn--sm" data-bc-pdf aria-disabled="true" target="_blank" rel="noopener" href="#">Open it to print' + newTab() + "</a></div></div>" +
-      '<p class="section__note">The department\'s Blue Card, filled in from the sections above: the major and flexible courses in the Major rows, Minor 1 in the first four Minor rows, Minor 2 in the last four. It updates as you move courses.</p>' +
-      bcDetailsHtml() + '<p class="bc-pdf-note" id="bc-pdf-note" role="status">Loading the form…</p><iframe id="bc-frame" class="bc-frame" title="The filled-in Blue Card" hidden></iframe></section>' + (setTimeout(bcPreview, 0) ? "" : "");
+      '<section class="bc-off" aria-labelledby="bco-h"><div class="h-row"><h2 id="bco-h">The official forms, filled in</h2><div class="toolbar toolbar--tight"><a class="btn btn--sm btn--solid" data-bc-pdf aria-disabled="true" download="Blue Card (Tentative Program of Study).pdf" href="#">Download the filled form</a><a class="btn btn--sm" data-bc-pdf aria-disabled="true" target="_blank" rel="noopener" href="#">Open it to print' + newTab() + "</a></div></div>" +
+      '<div class="seg" role="group" aria-label="Which form">' + Object.keys(PDF_FORMS).map(function (k) { return '<button type="button" class="seg__b" data-act="bc-form" data-id="' + k + '" aria-pressed="' + (bcWhich() === k) + '">' + esc(PDF_FORMS[k].title) + "</button>"; }).join("") + "</div>" +
+      '<p class="section__note">Both department forms, filled in from the sections above. Major and flexible courses go in the Major rows; Minor 1 and Minor 2 split the Minor rows (' + PDF_FORMS.bluecard.minor + " each on the Blue Card, " + PDF_FORMS.pos.minor + " each on the Program of Study). They update as you move courses. Signatures are left for your faculty.</p>" +
+      bcDetailsHtml() + '<p class="bc-pdf-note" id="bc-pdf-note" role="status">Loading the form…</p><iframe id="bc-frame" class="bc-frame" title="The filled-in form" hidden></iframe></section>' + (setTimeout(bcPreview, 0) ? "" : "");
   }
   function bcMove(id, sec) { var s = bcLoad(); s.place[id] = sec; bcSave(s); refresh(); }
   function bcSaveAll() {
@@ -2154,6 +2180,7 @@
     if (act === "mark-all-read") markAllRead();
     if (act === "new-phd") { var k0 = b.getAttribute("data-kind"), pre = b.getAttribute("data-program") ? { program: b.getAttribute("data-program"), kind: "session", status: "upcoming" } : null; openDialog(phdForm(k0, null, pre), function (v) { return savePhd(k0, null, v); }); }
     if (act === "bc-save") bcSaveAll();
+    if (act === "bc-form") { store.set("bc.form", id); document.querySelectorAll("[data-act=bc-form]").forEach(function (x) { x.setAttribute("aria-pressed", String(x.getAttribute("data-id") === id)); }); bcPreview(); }
     if (act === "bc-reset") { store.del("bluecard"); refresh(); toast("Back to your saved courses"); }
     if (act === "bc-drop") { var sb = bcLoad(); sb.custom = sb.custom.filter(function (x) { return x.id !== id; }); delete sb.place[id]; bcSave(sb); refresh(); }
     if (act === "plan-save") planSaveAll();
@@ -2403,7 +2430,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007073024";
+  var BUILD = "20261007082644";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp

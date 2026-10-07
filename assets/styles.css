@@ -945,3 +945,9 @@ a.evt__title:hover { text-decoration: underline; }
 .pcrd__g { margin: 4px 0 0; font-size: var(--f1); }
 .pcrd__g input { width: 4rem; }
 a[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.bc-off .seg { display: flex; flex-wrap: wrap; gap: 0; margin: 8px 0; }
+.bc-off .seg__b { font: inherit; font-size: var(--f1); font-weight: 700; padding: 8px 14px; border: 2px solid var(--rule-strong); background: var(--surface); color: var(--ink); cursor: pointer; }
+.bc-off .seg__b + .seg__b { border-left: 0; }
+.bc-off .seg__b[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.bc-off .seg__b:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (min-width: 720px) { .bc-grid--qe { grid-template-columns: 2fr 1fr; } }

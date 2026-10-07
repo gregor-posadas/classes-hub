@@ -165,7 +165,10 @@ function doGet(e) {
 
 /* Official forms the hub fills in. The department's site doesn't let other sites load its PDFs,
    so the backend fetches the blank form and hands it to the hub. Only these addresses are allowed. */
-var FORMS = { bluecard: 'https://ce.berkeley.edu/sites/default/files/assets/aao/BlueCard.pdf' };
+var FORMS = {
+  bluecard: 'https://ce.berkeley.edu/sites/default/files/assets/aao/BlueCard.pdf',
+  pos: 'https://ce.berkeley.edu/sites/default/files/assets/aao/program%20of%20study%20for%20phd.pdf'
+};
 function officialForm(name) {
   var url = FORMS[name];
   if (!url) throw new Error('Unknown form.');
