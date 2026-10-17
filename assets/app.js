@@ -1487,7 +1487,7 @@
     var envIn = minors[0].concat(minors[1]).filter(isEnvECore), deIn = minors[0].concat(minors[1]).filter(function (c) { return c.de; });
     var minorChecks = check(outside ? true : false, "At least one minor fully outside CEE", outside ? "" : "Neither minor is outside CEE yet.") +
       check(envIn.length ? "warn" : true, "No environmental engineering in a minor", envIn.length ? "Move " + esc(envIn.map(function (c) { return c.code; }).join(", ")) + "." : "") +
-      (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". CEE allows it (Sara, Sep 4); ask Yael whether the DE does.") : "");
+      (deIn.length ? check("warn", "DE courses in a minor", esc(deIn.map(function (c) { return c.code; }).join(", ")) + ". The DE allows overlap (welcome email, Oct 15) and CEE sets no limit (Sara, Sep 4); Sara still has to confirm Development Engineering works as a minor.") : "");
     var st = deState(), de = RULES.de || {}, el = st.electives, md = deModules(el), needM = de.minModules || 2, home = el.filter(isCEE);
     var deChecks = check(st.n.open ? false : st.n.done === st.total ? true : "doing", "<b>All " + st.total + " DE courses</b>", st.n.open ? plural(st.n.open, "slot") + " empty." : "") +
       check(md.ok, "Electives from " + needM + " modules", md.n ? esc(md.mods.filter(function (m) { return m.course; }).map(function (m) { return "M" + m.key.slice(1) + " " + m.course.code + (m.state === "pet" ? " (petition)" : ""); }).join(", ")) : "") +
@@ -2502,7 +2502,7 @@
   var sub = document.getElementById("brand-sub"); if (sub && cfg.semesterLabel) sub.textContent = cfg.semesterLabel + ", UC Berkeley";
 
   /* ---------- stay on the newest version (same approach as the Microbe Busters Hub) ---------- */
-  var BUILD = "20261007100130";
+  var BUILD = "20261017231636";
   var lastCheck = 0;
   function checkVersion(onLoad) {
     if (BUILD.indexOf("__") === 0) return;            // local copy without a stamp
